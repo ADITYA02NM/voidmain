@@ -55,10 +55,10 @@ function HeaderImpl() {
       <div className="tag">MONITOR</div>
       <button
         className={"sim-btn" + (simRunning ? " running" : "")}
-        title={simRunning ? "Stop the demo simulation" : "Run the client-side demo simulation"}
+        title={simRunning ? "Stop the simulated smart-home tour" : "Run the simulated smart-home tour"}
         onClick={() => simulation.toggle()}
       >
-        {simRunning ? "■ STOP" : "▶ SIMULATE"}
+        {simRunning ? "■ STOP" : "▶ SIM TOUR"}
       </button>
       <button className="session-chip" title="Sign out" onClick={() => { transport.stop(); logout(); }}>SIGN OUT</button>
     </header>

@@ -38,7 +38,7 @@ export const QUICK_CMDS = [
   { label: "ACK ALL", cmd: "/ack all" },
   { label: "UNACKED", cmd: "/filter type:unacked" },
   { label: "FOCUS NODE", cmd: "/focus pi3a" },
-  { label: "SIMULATE", cmd: "/simulate" },
+  { label: "SIM TOUR", cmd: "/simulate" },
   { label: "EXPORT CSV", cmd: "/export alerts" },
   { label: "LOCK", cmd: "/lock" },
 ];
