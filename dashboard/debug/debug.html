@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>ULTRON — WS Debug Inspector</title>
+<style>
+/* Standalone, read-only WS inspector. No React, no build, no external refs.
+   Publishes nothing to MQTT — sends only {ctl:"ping"} clock-sync frames.
+   Palette and type roles mirror web/src/styles/tokens.css (Intelligence Brief). */
+:root{
+  --bg:#100e0c;--panel:#1a1714;--panel2:#14120f;--border:#2a2420;--border2:#352e28;
+  --text:#ddd4c8;--muted:#9a8e80;--muted2:#6e6050;
+  --green:#3ac870;--yellow:#d4b030;--red:#d04838;--purple:#a060d0;
+  --green-tint:rgba(58,200,112,.08);--red-tint:rgba(208,72,56,.10);
+  --serif:"Newsreader","Times New Roman",serif;
+  --sans:"Schibsted Grotesk",Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+  --radius:3px;
+}
+*{box-sizing:border-box}
+::selection{background:rgba(160,96,208,.25)}
+:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--mono);font-size:12px;line-height:1.5;padding:16px;-webkit-font-smoothing:antialiased}
+h1{font-family:var(--serif);font-weight:400;font-size:16px;margin:0;letter-spacing:.15em}
+h1 b{color:var(--green);font-weight:700}
+h1 span{font-family:var(--sans);font-size:11px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-left:8px}
+h2{font-family:var(--serif);font-size:13px;font-weight:700;letter-spacing:.04em;color:var(--text);margin:0 0 8px}
+a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 16px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.chip{padding:4px 8px;border:1px solid var(--border2);border-radius:var(--radius);font-family:var(--sans);font-size:10px;font-weight:600;letter-spacing:.1em}
+.chip.live{color:var(--green);border-color:var(--green)}
+.chip.stale{color:var(--yellow);border-color:var(--yellow)}
+.chip.offline{color:var(--red);border-color:var(--red)}
+.ro{color:var(--muted);border:1px dashed var(--border2);padding:4px 8px;border-radius:var(--radius);font-size:11px}
+button{font-family:var(--sans);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;background:var(--panel2);color:var(--text);border:1px solid var(--border2);border-radius:var(--radius);padding:4px 8px;cursor:pointer;box-shadow:inset 0 -2px 0 var(--border2)}
+button:hover{border-color:var(--green);background:var(--green-tint)}
+button.active{color:var(--green);background:var(--green-tint);border-color:var(--green)}
+button.off{opacity:.45}
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:8px}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px}
+.c3{grid-column:span 3}.c4{grid-column:span 4}.c5{grid-column:span 5}.c6{grid-column:span 6}.c7{grid-column:span 7}.c8{grid-column:span 8}.c12{grid-column:span 12}
+@media(max-width:1000px){[class^="c"]{grid-column:1/-1}}
+table{width:100%;border-collapse:collapse}
+td,th{text-align:left;padding:4px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+th{color:var(--muted);font-family:var(--sans);font-size:10px;letter-spacing:.08em;text-transform:uppercase;font-weight:500}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums slashed-zero}
+.kv .k{color:var(--muted);font-family:var(--sans)}
+.filters{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+#log{max-height:60vh;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
+.row{padding:4px 8px;border-bottom:1px solid var(--border);white-space:pre-wrap;word-break:break-word}
+.row.bad{background:var(--red-tint);box-shadow:inset 3px 0 0 var(--red)}
+.badtag{color:var(--red);font-weight:700}
+.ts{color:var(--muted2)}
+.t-score{color:var(--green)}.t-band{color:var(--purple)}.t-alert{color:var(--red)}.t-health{color:var(--muted)}
+.t-lan{color:var(--yellow)}.t-tripwire{color:var(--red)}.t-history{color:var(--muted)}.t-toast{color:var(--muted2)}.t-event{color:var(--yellow)}
+.bar{display:inline-block;height:8px;background:var(--green);vertical-align:middle}
+.hist-row{display:flex;align-items:center;gap:8px;padding:2px 0}
+.hist-row .lbl{width:76px;color:var(--muted)}
+.hist-row .cnt{width:40px;text-align:right;color:var(--muted)}
+.big{font-family:var(--serif);font-size:24px;font-weight:700;line-height:1}
+.muted{color:var(--muted)}
+.ok{color:var(--green)}.warn{color:var(--yellow)}.err{color:var(--red)}
+.sp{flex:1}
+.mt8{margin-top:8px}
+.mt10{margin-top:12px}
+.mt12{margin-top:12px}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>ULT<b>RON</b><span>WS debug</span></h1>
+  <span class="chip offline" id="conn">OFFLINE</span>
+  <span class="ro">READ-ONLY · publishes nothing (clock-sync only)</span>
+  <span class="muted"><b id="fcount">0</b> frames · <b id="errcount">0</b> contract errors</span>
+  <span class="sp"></span>
+  <button id="pause">Pause</button>
+  <button id="clear">Clear</button>
+  <button id="copy">Copy shown JSON</button>
+  <a href="/">Operator view →</a>
+</div>
+
+<div class="grid">
+  <!-- 1. Connection -->
+  <div class="panel c3">
+    <h2>1 · Connection</h2>
+    <div class="kv"><span class="k">WS state</span><span id="c-state">—</span></div>
+    <div class="kv"><span class="k">reconnects</span><span id="c-recon">0</span></div>
+    <div class="kv"><span class="k">last frame</span><span id="c-last">—</span></div>
+    <div class="kv"><span class="k">clock offset</span><span id="c-off">—</span></div>
+    <div class="kv"><span class="k">uncertainty</span><span id="c-unc">—</span></div>
+    <h2 class="mt12">/healthz (5s)</h2>
+    <div id="c-health" class="muted">polling…</div>
+  </div>
+
+  <!-- 3. Rates -->
+  <div class="panel c3">
+    <h2>3 · Rates (msg/s per t)</h2>
+    <div id="rates"></div>
+    <div class="kv mt8"><span class="k">total msg/s</span><span id="rate-total">0</span></div>
+  </div>
+
+  <!-- 4. Latency -->
+  <div class="panel c6">
+    <h2>4 · Latency · bus → screen</h2>
+    <div class="kv"><span class="k">p50 / p95 / p99</span><span><span id="l50">—</span> / <span id="l95">—</span> / <span id="l99">—</span> ms</span></div>
+    <div id="hist" class="mt8"></div>
+    <h2 class="mt10">last 20 samples (ms)</h2>
+    <div id="l-last" class="muted"></div>
+  </div>
+
+  <!-- 5. State snapshot -->
+  <div class="panel c5">
+    <h2>5 · State snapshot</h2>
+    <div class="kv"><span class="k">score</span><span class="big" id="s-score">—</span></div>
+    <div class="kv"><span class="k">band</span><span id="s-band">—</span></div>
+    <div class="kv"><span class="k">alerts open / acked</span><span id="s-alerts">0 / 0</span></div>
+    <div class="kv"><span class="k">history points</span><span id="s-hist">0</span></div>
+    <h2 class="mt10">node health age</h2>
+    <div id="s-nodes"></div>
+  </div>
+
+  <!-- 6. Contract check -->
+  <div class="panel c7">
+    <h2>6 · Contract check (dashboard.md §5)</h2>
+    <div id="contract" class="muted">No frames yet.</div>
+  </div>
+
+  <!-- 2. Frame log -->
+  <div class="panel c12">
+    <h2>2 · Live frame log (newest first, cap 1000)</h2>
+    <div class="filters" id="filters"></div>
+    <div id="log"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+(function(){
+  var $=function(s){return document.querySelector(s)};
+  var TYPES=["score","band","alert","health","lan","tripwire","history","toast","event"];
+  var BANDS=["GREEN","YELLOW","RED","PURPLE"];
+
+  // ---- state ----
+  var ws=null, connected=false, reconnects=0, lastMsg=0, backoff=1, paused=false;
+  var offsets=[], rtts=[];
+  var frames=[];                 // {clientTs, ts, t, d, raw, bad:[]}
+  var filter={}; TYPES.forEach(function(t){filter[t]=true;});
+  var latSamples=[];             // ms
+  var rateCount={}, rateShown={}; TYPES.forEach(function(t){rateCount[t]=0;rateShown[t]=0;});
+  var snap={score:null, band:null, nodes:{}, hist:0};
+  var alertAck={};               // id -> ack
+  var errCount=0;
+
+  // ---- clock sync ----
+  function median(a){ if(!a.length) return 0; var s=a.slice().sort(function(x,y){return x-y}); return s[Math.floor(s.length/2)]; }
+  function offsetMs(){ return median(offsets); }
+  function uncertMs(){ return rtts.length? Math.min.apply(null,rtts)/2 : Infinity; }
+  function ping(){ if(ws&&ws.readyState===1) ws.send(JSON.stringify({ctl:"ping",c:Date.now()})); }
+  function onPong(p){ var rtt=Date.now()-p.c; rtts.push(rtt); offsets.push(p.s-(p.c+rtt/2)); if(offsets.length>20){offsets.shift();rtts.shift();} }
+
+  // ---- contract validation ----
+  function isNum(x){return typeof x==="number"&&isFinite(x);}
+  function isStr(x){return typeof x==="string";}
+  function validate(t,d){
+    var p=[];
+    if(TYPES.indexOf(t)<0){ p.push("unknown t:"+t); return p; }
+    if(typeof d!=="object"||d===null){ p.push("d not object"); return p; }
+    if(t==="score"){ if(!isNum(d.v)) p.push("v not number"); }
+    else if(t==="band"){ if(BANDS.indexOf(d.b)<0) p.push("b not a band"); }
+    else if(t==="alert"){ ["id","sev","title","src","body"].forEach(function(k){ if(!(k in d)) p.push("missing "+k); }); if("ack" in d && typeof d.ack!=="boolean") p.push("ack not bool"); }
+    else if(t==="health"){ if(!isStr(d.node)) p.push("node not string"); }
+    else if(t==="lan"){ if(!isStr(d.mac)) p.push("mac not string"); }
+    else if(t==="tripwire"){ if(!isStr(d.node)) p.push("node not string"); }
+    else if(t==="history"){ if(!Array.isArray(d.points)) p.push("points not array"); }
+    else if(t==="toast"){ if(!isStr(d.msg)) p.push("msg not string"); }
+    else if(t==="event"){ if(!isStr(d.node)) p.push("node not string"); if(!isStr(d.kind)) p.push("kind not string"); if(!isStr(d.summary)) p.push("summary not string"); }
+    return p;
+  }
+
+  // ---- frame handling ----
+  function onFrame(env, raw){
+    var t=env.t, d=env.d;
+    var bad=validate(t,d);
+    if(bad.length) errCount+=1;
+    // rates
+    if(rateCount[t]!==undefined) rateCount[t]+=1;
+    // latency (bus->screen): (now + offset) - serverTs*1000
+    if(offsets.length && isNum(env.ts) && t!=="history" && t!=="toast"){
+      var lat=(Date.now()+offsetMs())-env.ts*1000;
+      if(lat>=0 && lat<60000){ latSamples.push(lat); if(latSamples.length>500) latSamples.shift(); }
+    }
+    // snapshot
+    if(t==="score" && d && isNum(d.v)) snap.score=d.v;
+    else if(t==="band" && d) snap.band=d.b;
+    else if(t==="health" && d && d.node) snap.nodes[d.node]=Date.now();
+    else if(t==="history" && d && Array.isArray(d.points)) snap.hist=d.points.length;
+    else if(t==="alert" && d && d.id!=null) alertAck[d.id]=!!d.ack;
+    // log store
+    frames.unshift({clientTs:Date.now(), ts:env.ts, t:t, d:d, raw:raw, bad:bad});
+    if(frames.length>1000) frames.pop();
+  }
+
+  // ---- rendering (throttled) ----
+  function pct(a,p){ if(!a.length) return 0; var s=a.slice().sort(function(x,y){return x-y}); return s[Math.min(s.length-1,Math.floor(p/100*s.length))]; }
+
+  function renderLog(){
+    var log=$("#log"); log.textContent="";
+    var shown=frames.filter(function(f){return filter[f.t];});
+    for(var i=0;i<shown.length && i<400;i++){
+      var f=shown[i];
+      var row=document.createElement("div"); row.className="row"+(f.bad.length?" bad":"");
+      var ts=document.createElement("span"); ts.className="ts";
+      ts.textContent=(isFinite(f.ts)? new Date(f.ts*1000).toISOString().slice(11,23):"--")+" ";
+      var tag=document.createElement("span"); tag.className="t-"+f.t; tag.textContent="["+f.t+"] ";
+      row.appendChild(ts); row.appendChild(tag);
+      if(f.bad.length){ var b=document.createElement("span"); b.className="badtag"; b.textContent="FAIL · "+f.bad.join("; ")+" "; row.appendChild(b); }
+      row.appendChild(document.createTextNode(JSON.stringify(f.d)));
+      log.appendChild(row);
+    }
+  }
+
+  function renderPanels(){
+    // connection
+    $("#c-recon").textContent=reconnects;
+    $("#c-last").textContent=lastMsg? ((Date.now()-lastMsg)+"ms ago"):"—";
+    $("#c-off").textContent=offsets.length? (offsetMs().toFixed(1)+" ms"):"—";
+    $("#c-unc").textContent=rtts.length? ("± "+uncertMs().toFixed(1)+" ms"):"—";
+    var cs=$("#c-state"); cs.textContent=connected?(Date.now()-lastMsg>5000?"STALE":"LIVE"):"OFFLINE";
+    cs.className=connected?(Date.now()-lastMsg>5000?"warn":"ok"):"err";
+    // counts
+    $("#fcount").textContent=frames.length; $("#errcount").textContent=errCount;
+    // rates
+    var rd=$("#rates"); rd.textContent=""; var total=0;
+    TYPES.forEach(function(t){
+      total+=rateShown[t];
+      var r=document.createElement("div"); r.className="kv";
+      var k=document.createElement("span"); k.className="k t-"+t; k.textContent=t;
+      var v=document.createElement("span"); v.textContent=rateShown[t];
+      r.appendChild(k); r.appendChild(v); rd.appendChild(r);
+    });
+    $("#rate-total").textContent=total;
+    // latency
+    $("#l50").textContent=latSamples.length?pct(latSamples,50).toFixed(0):"—";
+    $("#l95").textContent=latSamples.length?pct(latSamples,95).toFixed(0):"—";
+    $("#l99").textContent=latSamples.length?pct(latSamples,99).toFixed(0):"—";
+    renderHist();
+    $("#l-last").textContent=latSamples.slice(-20).map(function(x){return x.toFixed(0);}).join(" · ")||"—";
+    // snapshot
+    $("#s-score").textContent=snap.score==null?"—":snap.score;
+    $("#s-band").textContent=snap.band||"—";
+    var open=0,ack=0; Object.keys(alertAck).forEach(function(id){ alertAck[id]?ack++:open++; });
+    $("#s-alerts").textContent=open+" / "+ack;
+    $("#s-hist").textContent=snap.hist;
+    var sn=$("#s-nodes"); sn.textContent="";
+    var nk=Object.keys(snap.nodes);
+    if(!nk.length){ sn.className="muted"; sn.textContent="no health frames yet"; }
+    else nk.sort().forEach(function(n){
+      var age=(Date.now()-snap.nodes[n])/1000;
+      var r=document.createElement("div"); r.className="kv";
+      var k=document.createElement("span"); k.className="k"; k.textContent=n;
+      var v=document.createElement("span"); v.className=age>30?"err":age>15?"warn":"ok"; v.textContent=age.toFixed(0)+"s";
+      r.appendChild(k); r.appendChild(v); sn.appendChild(r);
+    });
+    // contract
+    var cc=$("#contract");
+    var bads=frames.filter(function(f){return f.bad.length;}).slice(0,8);
+    if(!frames.length){ cc.className="muted"; cc.textContent="No frames yet."; }
+    else if(!bads.length){ cc.className="ok"; cc.textContent="PASS · all "+frames.length+" frames conform to the contract."; }
+    else { cc.className=""; cc.textContent="";
+      var h=document.createElement("div"); h.className="err"; h.textContent="FAIL · "+errCount+" non-conforming frame(s). Latest:"; cc.appendChild(h);
+      bads.forEach(function(f){ var d=document.createElement("div"); d.textContent="["+f.t+"] "+f.bad.join("; ")+"  "+JSON.stringify(f.d).slice(0,80); cc.appendChild(d); });
+    }
+  }
+
+  function renderHist(){
+    var h=$("#hist"); h.textContent="";
+    var buckets=[0,10,20,30,50,75,100,Infinity], labels=["0-10","10-20","20-30","30-50","50-75","75-100","100+"];
+    var counts=labels.map(function(){return 0;});
+    latSamples.forEach(function(x){ for(var i=0;i<labels.length;i++){ if(x>=buckets[i]&&x<buckets[i+1]){counts[i]++;break;} } });
+    var max=Math.max(1,Math.max.apply(null,counts));
+    labels.forEach(function(lb,i){
+      var row=document.createElement("div"); row.className="hist-row";
+      var l=document.createElement("span"); l.className="lbl"; l.textContent=lb+"ms";
+      var bar=document.createElement("span"); bar.className="bar"; bar.style.width=(counts[i]/max*140)+"px";
+      bar.style.background=i>=6?"var(--red)":i>=4?"var(--yellow)":"var(--green)";
+      var c=document.createElement("span"); c.className="cnt"; c.textContent=counts[i];
+      row.appendChild(l); row.appendChild(bar); row.appendChild(c); h.appendChild(row);
+    });
+  }
+
+  // ---- filters ----
+  (function buildFilters(){
+    var f=$("#filters");
+    TYPES.forEach(function(t){
+      var b=document.createElement("button"); b.className="active t-"+t; b.textContent=t;
+      b.addEventListener("click",function(){ filter[t]=!filter[t]; b.classList.toggle("active",filter[t]); b.classList.toggle("off",!filter[t]); renderLog(); });
+      f.appendChild(b);
+    });
+  })();
+
+  // ---- controls ----
+  $("#pause").addEventListener("click",function(){ paused=!paused; this.textContent=paused?"Resume":"Pause"; this.classList.toggle("active",paused); });
+  $("#clear").addEventListener("click",function(){ frames=[]; latSamples=[]; errCount=0; renderLog(); });
+  $("#copy").addEventListener("click",function(){
+    var shown=frames.filter(function(f){return filter[f.t];}).map(function(f){return {t:f.t,ts:f.ts,d:f.d};});
+    var txt=JSON.stringify(shown,null,2);
+    if(navigator.clipboard) navigator.clipboard.writeText(txt); else window.prompt("Copy:",txt);
+    this.textContent="Copied "+shown.length; var self=this; setTimeout(function(){self.textContent="Copy shown JSON";},1200);
+  });
+
+  // ---- /healthz poll ----
+  function pollHealth(){
+    fetch("/healthz",{cache:"no-store"}).then(function(r){return r.json();}).then(function(j){
+      $("#c-health").className=""; $("#c-health").textContent=JSON.stringify(j);
+    }).catch(function(){ $("#c-health").className="err"; $("#c-health").textContent="unreachable"; });
+  }
+
+  // ---- websocket (read-only) ----
+  function setConn(){ var c=$("#conn"); var st=connected?(Date.now()-lastMsg>5000?"stale":"live"):"offline"; c.className="chip "+st; c.textContent=st.toUpperCase(); }
+  function connect(){
+    try{ ws=new WebSocket((location.protocol==="https:"?"wss://":"ws://")+location.host+"/ws"); }
+    catch(e){ schedule(); return; }
+    ws.addEventListener("open",function(){ connected=true; backoff=1; lastMsg=Date.now(); setConn(); ping(); });
+    ws.addEventListener("message",function(ev){
+      lastMsg=Date.now();
+      var m; try{ m=JSON.parse(ev.data); }catch(e){ return; }
+      if(m && m.ctl==="pong"){ onPong(m); return; }
+      if(m && typeof m.t==="string" && !paused) onFrame(m, ev.data);
+      setConn();
+    });
+    ws.addEventListener("close",function(){ connected=false; reconnects+=1; setConn(); schedule(); });
+    ws.addEventListener("error",function(){ try{ws.close();}catch(e){} });
+  }
+  function schedule(){ setTimeout(connect,backoff*1000); backoff=Math.min(backoff*2,5); }
+
+  // ---- timers ----
+  setInterval(ping,3000);                 // clock sync
+  setInterval(function(){ TYPES.forEach(function(t){rateShown[t]=rateCount[t];rateCount[t]=0;}); },1000); // rates/sec
+  setInterval(function(){ renderPanels(); renderLog(); },400);  // throttled UI
+  setInterval(setConn,1000);
+  setInterval(pollHealth,5000); pollHealth();
+
+  connect();
+})();
+</script>
+</body>
+</html>

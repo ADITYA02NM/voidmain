@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 680" width="1200" height="680" role="img" aria-label="voidmain architecture: sensors to decision engine to actuators to log and dashboard">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0A0A0F"/>
+      <stop offset="100%" stop-color="#100A1E"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8A2BE2"/>
+      <stop offset="100%" stop-color="#14E0C8"/>
+    </linearGradient>
+    <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#14E0C8"/>
+    </marker>
+    <marker id="arwp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8A2BE2"/>
+    </marker>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <style>
+      .stage { fill:#12111C; stroke:#2A2545; stroke-width:1.5; rx:12; }
+      .ttl   { font-family: ui-sans-serif, 'IBM Plex Sans', Inter, sans-serif; font-size:19px; font-weight:700; fill:#FFFFFF; }
+      .sub   { font-family: ui-monospace, 'JetBrains Mono', monospace; font-size:13px; fill:#8F89B8; }
+      .lbl   { font-family: ui-monospace, monospace; font-size:13px; fill:#14E0C8; }
+      .lblp  { font-family: ui-monospace, monospace; font-size:13px; fill:#8A2BE2; }
+      .sim   { font-family: ui-monospace, monospace; font-size:11px; fill:#0A0A0F; font-weight:700; }
+      .h     { font-family: ui-sans-serif, sans-serif; font-size:24px; font-weight:800; fill:#FFFFFF; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="680" fill="url(#bg)"/>
+  <text x="40" y="46" class="h">voidmain — the control loop</text>
+  <line x1="40" y1="60" x2="400" y2="60" stroke="url(#edge)" stroke-width="3"/>
+
+  <!-- 1 sensors -->
+  <g>
+    <rect x="40" y="96" width="330" height="150" class="stage"/>
+    <text x="64" y="130" class="ttl">① Sensors / Events</text>
+    <text x="64" y="158" class="sub">ESP32 · DHT · LDR · tripwire</text>
+    <text x="64" y="180" class="sub">presence · door · hazard state</text>
+    <rect x="64" y="196" width="46" height="20" rx="4" fill="#14E0C8"/>
+    <text x="71" y="210" class="sim">SIM</text>
+    <text x="118" y="211" class="sub">labelled in every payload</text>
+  </g>
+
+  <!-- 2 normalize -->
+  <g>
+    <rect x="40" y="286" width="330" height="130" class="stage"/>
+    <text x="64" y="320" class="ttl">② Event normalization</text>
+    <text x="64" y="348" class="sub">schema_version · event_id · ts</text>
+    <text x="64" y="370" class="sub">source · value · simulation flag</text>
+    <text x="64" y="392" class="sub">stale / malformed → rejected</text>
+  </g>
+
+  <!-- 3 mqtt -->
+  <g>
+    <rect x="40" y="456" width="330" height="110" class="stage"/>
+    <text x="64" y="490" class="ttl">③ MQTT broker (local)</text>
+    <text x="64" y="518" class="sub">ultron/events · decisions</text>
+    <text x="64" y="540" class="sub">commands · acks · status</text>
+  </g>
+
+  <!-- 4 decision engine -->
+  <g filter="url(#soft)">
+    <rect x="470" y="96" width="360" height="200" rx="12" fill="#160F28" stroke="url(#edge)" stroke-width="2"/>
+  </g>
+  <text x="494" y="132" class="ttl">④ Decision engine</text>
+  <text x="494" y="160" class="sub">deterministic rules — no LLM in path</text>
+  <text x="494" y="184" class="sub">risk fusion 0–100 →</text>
+  <text x="494" y="206" class="sub">GREEN · YELLOW · RED · PURPLE</text>
+  <text x="494" y="234" class="lbl">decision_id · policy · reason</text>
+  <text x="494" y="256" class="lbl">triggering event_ids · snapshot</text>
+
+  <!-- 5 policy/commands -->
+  <g>
+    <rect x="470" y="336" width="360" height="120" class="stage"/>
+    <text x="494" y="370" class="ttl">⑤ Policy → commands</text>
+    <text x="494" y="398" class="sub">allowlisted actions only</text>
+    <text x="494" y="420" class="sub">validated params · TTL · idempotent</text>
+  </g>
+
+  <!-- 6 actuators -->
+  <g>
+    <rect x="470" y="496" width="360" height="130" class="stage"/>
+    <text x="494" y="530" class="ttl">⑥ Actuators</text>
+    <text x="494" y="558" class="sub">lighting groups · alarms · barriers</text>
+    <text x="494" y="580" class="sub">indicators · status displays</text>
+    <text x="494" y="604" class="lblp">ack: received → executed → verified</text>
+  </g>
+
+  <!-- 7 log + dashboard -->
+  <g>
+    <rect x="920" y="286" width="240" height="120" class="stage"/>
+    <text x="944" y="320" class="ttl">⑦ Event log</text>
+    <text x="944" y="348" class="sub">SQLite evidence</text>
+    <text x="944" y="370" class="sub">event → decision → cmd → ack</text>
+  </g>
+  <g>
+    <rect x="920" y="456" width="240" height="120" class="stage"/>
+    <text x="944" y="490" class="ttl">⑧ Dashboard</text>
+    <text x="944" y="518" class="sub">operator console</text>
+    <text x="944" y="540" class="sub">live · preserved from ULTRON</text>
+  </g>
+
+  <!-- edges -->
+  <g fill="none" stroke-width="2">
+    <path d="M205 246 V286" stroke="#14E0C8" marker-end="url(#arw)"/>
+    <path d="M205 416 V456" stroke="#14E0C8" marker-end="url(#arw)"/>
+    <path d="M370 511 H430 V196 H470" stroke="#8A2BE2" marker-end="url(#arwp)"/>
+    <path d="M650 296 V336" stroke="#14E0C8" marker-end="url(#arw)"/>
+    <path d="M650 456 V496" stroke="#14E0C8" marker-end="url(#arw)"/>
+    <path d="M830 540 H880 V346 H920" stroke="#8A2BE2" marker-end="url(#arwp)"/>
+    <path d="M1040 406 V456" stroke="#14E0C8" marker-end="url(#arw)"/>
+    <path d="M430 196 H470" stroke="none"/>
+  </g>
+
+  <text x="40" y="650" class="sub">correlation ids tie every stage together · local-only · no cloud · simulated inputs explicitly flagged</text>
+</svg>

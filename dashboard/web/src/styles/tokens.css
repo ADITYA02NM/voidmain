@@ -1,0 +1,173 @@
+/* ULTRON design tokens — Intelligence Brief direction.
+   Warm off-black, editorial weight, restrained signal.
+   Colours defined in oklch() with sRGB hex fallbacks. */
+:root {
+  /* Surfaces — warm charcoal */
+  --bg: #100e0c;
+  --panel: #1a1714;
+  --panel-2: #14120f;
+  --border: #2a2420;
+  --border-2: #352e28;
+
+  /* Text — warm grey ramp, WCAG AA compliant on --bg */
+  --text: #ddd4c8;
+  --muted: #9a8e80;
+  --muted-2: #6e6050;
+
+  /* OLED / hardware twin */
+  --oled-bg: #08080a;
+  --oled-fg: var(--text);
+
+  /* Banner (degraded state) */
+  --banner-text: #ffd7d7;
+
+  /* Chrome overlays and states */
+  --header-bg: rgba(16,14,12,.94);
+  --strip-bg: rgba(16,14,12,.85);
+  --overlay-bg: rgba(8,6,4,.75);
+  --hover-veil: rgba(255,255,255,.06);
+  --selection-bg: rgba(160,96,208,.25);
+  --lid-alarm: #3a1414;
+
+  /* Band signal ramps — 4-step: tint / soft / base / strong */
+  --green: #3ac870;
+  --green-tint: rgba(58,200,112,.08);
+  --green-soft: rgba(58,200,112,.30);
+  --green-strong: #28a858;
+
+  --yellow: #d4b030;
+  --yellow-tint: rgba(212,176,48,.08);
+  --yellow-soft: rgba(212,176,48,.30);
+  --yellow-strong: #b89820;
+
+  --red: #d04838;
+  --red-tint: rgba(208,72,56,.10);
+  --red-soft: rgba(208,72,56,.30);
+  --red-strong: #b83020;
+
+  --purple: #a060d0;
+  --purple-tint: rgba(160,96,208,.10);
+  --purple-soft: rgba(160,96,208,.30);
+  --purple-strong: #8040b0;
+
+  /* Active accent — switched by html[data-band] */
+  --accent: var(--green);
+  --accent-weak: var(--green-tint);
+  --accent-line: var(--green-soft);
+
+  /* Spacing — 4px half-step, 8px base grid */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 40px;
+
+  /* Type scale (see DESIGN.md type roles) */
+  --fs-2xs: 8px;
+  --fs-xs: 9px;
+  --fs-sm: 10px;
+  --fs-md: 11px;
+  --fs-base: 12px;
+  --fs-lg: 13px;
+  --fs-xl: 14px;
+  --fs-2xl: 16px;
+  --fs-3xl: 20px;
+  --fs-4xl: 22px;
+  --fs-display: 64px;
+  /* large numerics (hero / sparkline labels) */
+  --fs-5xl: 26px;
+  --fs-6xl: 32px;
+  --fs-7xl: 40px;
+  --fs-8xl: 44px;
+  --fs-hero: 96px;
+
+  /* Component dimensions */
+  --header-h: 38px;
+  --row-h: 28px;
+  --node-badge-w: 28px;
+  --time-col-w: 60px;
+  --cmd-name-w: 80px;
+  --layer-name-w: 92px;
+  --ring-size: 120px;
+  --posture-max-w: 220px;
+  --detail-w: 200px;
+  --auth-card-w: 380px;
+  --hero-pad: 96px;
+  --hero-visual-w: 720px;
+  --measure: 34ch;
+  --dialog-w: 480px;
+  --footer-max-w: 1400px;
+  --spark-h: 150px;
+  --spark-h-compact: 80px;
+  --hero-tint-h: 80px;
+  --suggest-max-h: 140px;
+  --feed-max-h: 420px;
+  --panel-min-h: 280px;
+  --panel-max-h: 500px;
+  --panel-max-h-stacked: 600px;
+  --scrollbar-w: 4px;
+  --dot-sm: 6px;
+  --dot-md: 8px;
+  --dot-lg: 10px;
+  --bar-w-1: 3px;
+  --bar-w-2: 4px;
+  --bar-w-3: 5px;
+  --glow-blur: 4px;
+  --blur-sm: 3px;
+  --blur-md: 6px;
+  --radius-pill: 10px;
+  --stroke: 1.5;
+  --stroke-heavy: 2;
+  --enter-offset: 6px;
+
+  --icon-size: 14px;
+  --icon-size-sm: 10px;
+
+  --radius: 3px;
+  --gap: 12px;
+
+  /* Typography — self-hosted OFL fonts */
+  --serif: "Newsreader", "Newsreader Fallback", "Times New Roman", serif;
+  --sans: "Schibsted Grotesk", "Schibsted Grotesk Fallback", Arial, sans-serif;
+  --mono: "JetBrains Mono", "JetBrains Mono Fallback", "Courier New", monospace;
+
+  /* Motion */
+  --dur: 200ms;
+  --dur-enter: 180ms;
+  --dur-sweep: 400ms;
+  --dur-flash: 800ms;
+  --dur-pulse: 1.5s;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@supports (color: oklch(0 0 0)) {
+  :root {
+    --bg: oklch(0.12 0.008 60);
+    --panel: oklch(0.17 0.010 60);
+    --panel-2: oklch(0.14 0.008 55);
+    --border: oklch(0.23 0.012 55);
+    --border-2: oklch(0.28 0.014 50);
+
+    --text: oklch(0.87 0.015 65);
+    --muted: oklch(0.63 0.020 65);
+    --muted-2: oklch(0.46 0.022 60);
+
+    --oled-bg: oklch(0.08 0.003 270);
+
+    --green: oklch(0.74 0.17 155);
+    --green-strong: oklch(0.65 0.15 155);
+    --yellow: oklch(0.77 0.14 90);
+    --yellow-strong: oklch(0.68 0.13 90);
+    --red: oklch(0.58 0.18 25);
+    --red-strong: oklch(0.50 0.17 25);
+    --purple: oklch(0.58 0.18 300);
+    --purple-strong: oklch(0.48 0.17 300);
+  }
+}
+
+html[data-band="GREEN"]  { --accent: var(--green);  --accent-weak: var(--green-tint);  --accent-line: var(--green-soft); }
+html[data-band="YELLOW"] { --accent: var(--yellow); --accent-weak: var(--yellow-tint); --accent-line: var(--yellow-soft); }
+html[data-band="RED"]    { --accent: var(--red);    --accent-weak: var(--red-tint);    --accent-line: var(--red-soft); }
+html[data-band="PURPLE"] { --accent: var(--purple); --accent-weak: var(--purple-tint); --accent-line: var(--purple-soft); }

@@ -1,0 +1,20 @@
+# deps / build
+node_modules/
+dist/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# secrets / local state — never commit
+auth.db
+auth.db-*
+ca/
+ca.key
+certs/server.key
+.env
+
+# tooling
+.DS_Store
+*.egg-info/
+.pytest_cache/

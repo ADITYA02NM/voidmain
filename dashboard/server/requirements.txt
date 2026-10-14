@@ -1,0 +1,9 @@
+# ULTRON dashboard server (Pi4 — GOVERNANCE). Pinned.
+aiohttp==3.10.10
+aiomqtt==2.3.0
+aiosqlite==0.20.0
+webauthn==3.0.1
+
+# dev / test only (not required at runtime on the Pi):
+#   pytest==8.3.3
+#   pytest-asyncio==0.24.0
