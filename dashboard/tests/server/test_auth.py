@@ -12,7 +12,7 @@ import pytest_asyncio
 from aiohttp import test_utils, web
 
 from server.auth import (
-    SESSION_COOKIE, add_auth_routes, reset_rate_limits,
+    SESSION_COOKIE, add_auth_routes, reset_rate_limits, reset_pending,
 )
 from server.auth_db import AuthDB
 from server.config import Config, ConfigError, _validate
@@ -26,8 +26,10 @@ CLIENT_ID = "test-client.apps.googleusercontent.com"
 @pytest.fixture(autouse=True)
 def _clear_rate():
     reset_rate_limits()
+    reset_pending()
     yield
     reset_rate_limits()
+    reset_pending()
 
 
 @pytest.fixture
@@ -218,3 +220,128 @@ def test_config_guard_ip_rp_id():
     cfg = Config(rp_id="192.168.1.1")
     with pytest.raises(ConfigError):
         _validate(cfg)
+
+
+# ── QR device-pairing (phone Google sign-in → desktop session) ────────────── #
+
+async def _issue_code(client):
+    resp = await client.post("/auth/qr")
+    assert resp.status == 200, await resp.text()
+    return await resp.json()
+
+
+async def test_qr_issue_returns_code_and_url(client, monkeypatch):
+    monkeypatch.setenv("VOIDMAIN_PUBLIC_HOST", "192.168.1.50")
+    body = await _issue_code(client)
+    assert len(body["code"]) == 8
+    assert body["expires_in"] == 300
+    assert body["url"] == (
+        f"http://192.168.1.50:8081/auth/approve?code={body['code']}"
+    )
+    events = [r["event"] for r in client.server.app["auth_db"].read_audit()]
+    assert "qr_issued" in events
+
+
+async def test_qr_issue_no_client_id(tmp_db):
+    """Without a client ID, QR issues in dev mode (code returned, not 503)."""
+    app = _make_app(tmp_db, client_id="")
+    async with test_utils.TestClient(test_utils.TestServer(app)) as c:
+        resp = await c.post("/auth/qr")
+        assert resp.status == 200
+        data = await resp.json()
+        assert "code" in data and "url" in data
+
+
+async def test_qr_svg(client):
+    u = "http://192.168.1.50:8081/auth/approve?code=ABCDEFGH"
+    resp = await client.get("/auth/qr.svg", params={"u": u})
+    assert resp.status == 200
+    assert resp.content_type == "image/svg+xml"
+    body = await resp.text()
+    assert "<svg" in body
+
+
+@pytest.mark.parametrize("bad_u", ["javascript:alert(1)", "ftp://x", "", "https://" + "a" * 400])
+async def test_qr_svg_rejects_bad_u(client, bad_u):
+    resp = await client.get("/auth/qr.svg", params={"u": bad_u})
+    assert resp.status == 400
+
+
+async def test_approve_page(client):
+    issued = await _issue_code(client)
+    resp = await client.get("/auth/approve", params={"code": issued["code"]})
+    assert resp.status == 200
+    assert resp.content_type == "text/html"
+    body = await resp.text()
+    assert issued["code"] in body
+    assert CLIENT_ID in body
+    assert "accounts.google.com/gsi/client" in body
+    csp = resp.headers["Content-Security-Policy"]
+    assert "https://accounts.google.com" in csp
+
+
+async def test_approve_page_unknown_code(client):
+    resp = await client.get("/auth/approve", params={"code": "ZZZZZZZZ"})
+    assert resp.status == 410
+
+
+async def test_qr_poll_pending(client):
+    issued = await _issue_code(client)
+    resp = await client.post("/auth/poll", json={"code": issued["code"]})
+    assert resp.status == 200
+    assert (await resp.json())["status"] == "pending"
+
+
+async def test_qr_full_flow_grants_session(client, tmp_db, patch_verifier):
+    patch_verifier(dict(GOOD_PAYLOAD))
+    issued = await _issue_code(client)
+    code = issued["code"]
+
+    # phone approves with a Google id_token
+    resp = await client.post(
+        "/auth/approve/complete", json={"code": code, "id_token": "fake"}
+    )
+    assert resp.status == 200, await resp.text()
+    assert (await resp.json())["email"] == "owner@example.com"
+    # phone response must NOT set the desktop session cookie
+    assert SESSION_COOKIE not in resp.cookies
+
+    # desktop polls and receives the session
+    poll = await client.post("/auth/poll", json={"code": code})
+    assert poll.status == 200
+    body = await poll.json()
+    assert body["authenticated"] is True
+    assert body["email"] == "owner@example.com"
+    assert SESSION_COOKIE in poll.cookies
+
+    sid = poll.cookies[SESSION_COOKIE].value
+    st = await client.get("/auth/status", cookies={SESSION_COOKIE: sid})
+    assert (await st.json())["authenticated"] is True
+
+    # code is one-time — second poll fails
+    again = await client.post("/auth/poll", json={"code": code})
+    assert again.status == 410
+
+    events = [r["event"] for r in tmp_db.read_audit()]
+    assert "qr_login" in events
+
+
+async def test_qr_approve_bad_token_leaves_pending(client, patch_verifier):
+    patch_verifier(ValueError("boom"))
+    issued = await _issue_code(client)
+    code = issued["code"]
+    resp = await client.post(
+        "/auth/approve/complete", json={"code": code, "id_token": "bad"}
+    )
+    assert resp.status == 401
+    poll = await client.post("/auth/poll", json={"code": code})
+    assert (await poll.json())["status"] == "pending"
+
+
+async def test_qr_expired_code_poll_410(client):
+    from server import auth as auth_mod
+    issued = await _issue_code(client)
+    code = issued["code"]
+    auth_mod._pending[code]["expires"] = auth_mod._pending[code]["created"] - 1
+    resp = await client.post("/auth/poll", json={"code": code})
+    assert resp.status == 410
