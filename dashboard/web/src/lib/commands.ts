@@ -207,7 +207,7 @@ export function execCommand(raw: string): void {
       const blob = new Blob([rows.join("\n")], { type: "text/csv" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url; a.download = `ultron-alerts-${Date.now()}.csv`; a.click();
+      a.href = url; a.download = `voidmain-alerts-${Date.now()}.csv`; a.click();
       URL.revokeObjectURL(url);
       store.addCommand(entry(trimmed, `Exported ${s.alerts.length} alerts`, true));
       break;

@@ -45,7 +45,7 @@ threshold.
 |---|---|
 | **Stage 1 — Foundation** ✅ | Multiple sensors + connected devices collecting and communicating real-time data over local MQTT |
 | **Stage 2 — Functional** | Multi-sensor fusion drives **multiple actuators** through one policy decision — not independent threshold rules |
-| **Stage 3 — Innovation** | Anomaly detection / prediction on the event history via the inherited ULTRON risk engine |
+| **Stage 3 — Innovation** | Anomaly detection / prediction on the event history via the inherited VoidMain risk engine |
 | **Minimum deliverable** | Multiple sensors influencing **coordinated responses across multiple connected components** |
 | **Constraints** | Physical IoT hardware *or* simulated sensor data — ours are **explicitly labelled `simulated`** in every payload |
 | **Suggested tech** | ESP32 · Raspberry Pi · DHT/LDR · MQTT · Python — all in the design, adapters keep hardware optional |
@@ -61,12 +61,12 @@ threshold.
 ```mermaid
 flowchart LR
     S["Sensors / Events<br/>(real or SIMULATED)"] --> N["Event normalization<br/>versioned schema"]
-    N -->|"ultron/events"| B[("Mosquitto<br/>localhost")]
+    N -->|"voidmain/events"| B[("Mosquitto<br/>localhost")]
     B --> D["Decision engine<br/>deterministic rules"]
-    D -->|"ultron/decisions"| P["Policy evaluation<br/>allowlist + timeouts"]
-    P -->|"ultron/commands"| A["Actuators<br/>lights · alarms · barriers"]
-    A -->|"ultron/acks"| L[("SQLite<br/>evidence log")]
-    L --> H["Operator dashboard<br/>preserved from ULTRON"]
+    D -->|"voidmain/decisions"| P["Policy evaluation<br/>allowlist + timeouts"]
+    P -->|"voidmain/commands"| A["Actuators<br/>lights · alarms · barriers"]
+    A -->|"voidmain/acks"| L[("SQLite<br/>evidence log")]
+    L --> H["Operator dashboard<br/>preserved from VoidMain"]
 ```
 
 **Everything is correlated.** One `trace_id` ties sensor event → decision →
@@ -105,7 +105,7 @@ voidmain/
 │   ├── server/             # aiohttp backend: MQTT bridge, WebAuthn auth, SQLite, WS feed
 │   │   ├── main.py         # entry point (HTTP :8080 / :8081 dev)
 │   │   ├── bridge.py       # MQTT ↔ WebSocket hub
-│   │   ├── config.py       # ULTRON_* env config
+│   │   ├── config.py       # VOIDMAIN_* env config
 │   │   └── auth_cli.py     # passkey enrollment / audit
 │   ├── tools/mock_feed.py  # DEV-ONLY scenario publisher (full GREEN→PURPLE replay)
 │   ├── tests/              # pytest suite
@@ -127,7 +127,7 @@ mosquitto -d
 cd dashboard
 python3 -m venv venv
 venv/bin/pip install -r server/requirements.txt
-ULTRON_HTTP_PORT=8081 venv/bin/python -c "from server.main import main; main()"
+VOIDMAIN_HTTP_PORT=8081 venv/bin/python -c "from server.main import main; main()"
 
 # 3 — first-run passkey owner (fresh auth.db)
 venv/bin/python -m server.auth_cli enroll-token
@@ -159,9 +159,9 @@ venv/bin/pytest
 
 | Component | State |
 |---|---|
-| Dashboard (web + server) | **Inherited verbatim from ULTRON** — untouched frontend, preserved contracts |
-| MQTT backbone, event/decision log | Implemented in ULTRON; reused here |
-| Decision engine | ULTRON risk fusion (0–100 → GREEN/YELLOW/RED/PURPLE) + voidmain coordination policies |
+| Dashboard (web + server) | **Inherited verbatim from VoidMain** — untouched frontend, preserved contracts |
+| MQTT backbone, event/decision log | Implemented in VoidMain; reused here |
+| Decision engine | VoidMain risk fusion (0–100 → GREEN/YELLOW/RED/PURPLE) + voidmain coordination policies |
 | Physical ESP32/Pi sensors | **Not part of this repo's demo** — hardware track runs in parallel; adapters will connect them later |
 | Simulated sensors | Clearly labelled `simulated: true` everywhere |
 | Minecraft bridge | Planned, not implemented (see roadmap) |

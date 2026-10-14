@@ -43,7 +43,7 @@ function HeaderImpl() {
 
   return (
     <header ref={headRef}>
-      <div className="wordmark">ULT<b>RON</b></div>
+      <div className="wordmark">Void<b>Main</b></div>
       <div className={"chip " + conn} role="status" aria-live="polite">
         <span className="led" />
         <span>{LABEL[conn]}</span>

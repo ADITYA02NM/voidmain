@@ -12,7 +12,7 @@ from collections import defaultdict
 
 from aiohttp import web
 
-LOG = logging.getLogger("ultron.ws_session")
+LOG = logging.getLogger("voidmain.ws_session")
 
 
 class SessionWsManager:

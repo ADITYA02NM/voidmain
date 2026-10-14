@@ -1,4 +1,4 @@
-"""ULTRON auth CLI commands.
+"""VoidMain auth CLI commands.
 
 Usage:
   python -m dashboard.server.auth_cli enroll-token [--ttl SECONDS]
@@ -100,7 +100,7 @@ def cmd_audit(db: AuthDB, args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="ultron-auth", description="ULTRON auth management")
+    parser = argparse.ArgumentParser(prog="voidmain-auth", description="VoidMain auth management")
     parser.add_argument("--db", help="Path to auth.db (default: from config)")
     sub = parser.add_subparsers(dest="command")
 

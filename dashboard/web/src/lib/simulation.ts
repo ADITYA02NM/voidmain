@@ -92,12 +92,12 @@ export class Simulation {
       } },
       { at: 9000, run: () => { this.target = 22; } },
       { at: 11000, run: () => {
-        this.emit("event", { topic: "ultron/detect/suricata", node: "pi3a", kind: "suricata", sev: "yellow", summary: "ET SCAN Nmap script scan detected", src_ip: "192.168.100.50", dest_ip: "192.168.100.1", sig_id: 2010935 });
+        this.emit("event", { topic: "voidmain/detect/suricata", node: "pi3a", kind: "suricata", sev: "yellow", summary: "ET SCAN Nmap script scan detected", src_ip: "192.168.100.50", dest_ip: "192.168.100.1", sig_id: 2010935 });
       } },
       { at: 13000, run: () => this.cmd("/latency") },
       { at: 15000, run: () => { this.target = 38; } },
       { at: 17000, run: () => {
-        this.emit("event", { topic: "ultron/detect/wifi", node: "pi3a", kind: "wifi", sev: "yellow", summary: "Rogue AP 'FREE_WIFI_5G' beaconing on channel 6" });
+        this.emit("event", { topic: "voidmain/detect/wifi", node: "pi3a", kind: "wifi", sev: "yellow", summary: "Rogue AP 'FREE_WIFI_5G' beaconing on channel 6" });
       } },
       { at: 19000, run: () => {
         this.emit("tripwire", { node: "pi3a", edge: "open" });
@@ -106,8 +106,8 @@ export class Simulation {
       { at: 23000, run: () => this.cmd("/filter type:suricata") },
       { at: 25000, run: () => {
         this.target = 64;
-        this.emit("event", { topic: "ultron/detect/suricata", node: "pi3a", kind: "suricata", sev: "red", summary: "ET TROJAN Possible Cobalt Strike C2 check-in", src_ip: "192.168.100.50", dest_ip: "185.220.101.9", sig_id: 2035007 });
-        this.emit("event", { topic: "ultron/detect/suricata", node: "pi3a", kind: "suricata", sev: "red", summary: "ET INFO Windows Executable Download From Non-Standard Port", src_ip: "192.168.100.50", dest_ip: "185.220.101.9" });
+        this.emit("event", { topic: "voidmain/detect/suricata", node: "pi3a", kind: "suricata", sev: "red", summary: "ET TROJAN Possible Cobalt Strike C2 check-in", src_ip: "192.168.100.50", dest_ip: "185.220.101.9", sig_id: 2035007 });
+        this.emit("event", { topic: "voidmain/detect/suricata", node: "pi3a", kind: "suricata", sev: "red", summary: "ET INFO Windows Executable Download From Non-Standard Port", src_ip: "192.168.100.50", dest_ip: "185.220.101.9" });
       } },
       { at: 27000, run: () => {
         this.alert("red", "Suricata IDS hit — ET MALWARE beaconing", "alert/pi3b", "Beaconing pattern from 192.168.100.50 to 185.220.101.9 — email dispatched to operator");
@@ -120,7 +120,7 @@ export class Simulation {
       } },
       { at: 35000, run: () => { this.target = 88; } },
       { at: 37000, run: () => {
-        this.emit("event", { topic: "ultron/detect/suricata", node: "pi3a", kind: "suricata", sev: "purple", summary: "ET MALWARE Metasploit Payload Execution", src_ip: "192.168.100.50", dest_ip: "185.220.101.9" });
+        this.emit("event", { topic: "voidmain/detect/suricata", node: "pi3a", kind: "suricata", sev: "purple", summary: "ET MALWARE Metasploit Payload Execution", src_ip: "192.168.100.50", dest_ip: "185.220.101.9" });
         this.alert("purple", "C2 beaconing detected", "alert/pi3b", "Sustained C2 session — PURPLE escalation envelope, operator paged");
       } },
       { at: 39000, run: () => this.toast("PURPLE — escalation envelope", "purple") },

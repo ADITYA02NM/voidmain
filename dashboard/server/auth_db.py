@@ -1,4 +1,4 @@
-"""ULTRON auth database (auth.db — separate from evidence.db).
+"""VoidMain auth database (auth.db — separate from evidence.db).
 
 Schema: credentials, sessions, challenges, enrollment_tokens, auth_audit.
 No biometric fields anywhere. Session IDs stored as SHA-256 hashes only.
@@ -41,10 +41,9 @@ CREATE TABLE IF NOT EXISTS sessions (
     id_hash         TEXT PRIMARY KEY,   -- SHA-256 of the actual session ID
     created_at      REAL NOT NULL,
     expires_at      REAL NOT NULL,
-    credential_id   TEXT NOT NULL,
+    credential_id   TEXT NOT NULL,      -- principal id (Google `sub` claim)
     ip              TEXT,
-    revoked         INTEGER NOT NULL DEFAULT 0,
-    FOREIGN KEY (credential_id) REFERENCES credentials(id)
+    revoked         INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS challenges (

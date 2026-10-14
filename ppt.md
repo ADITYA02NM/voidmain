@@ -14,7 +14,7 @@ for a technical judges' audience. Create a dark, premium, cyber-security-themed
 deck. Do NOT invent facts that are not in this brief.
 
 ## Brand / visual system
-- Project name: **voidmain** — the IoT evolution of ULTRON.
+- Project name: **voidmain** — the IoT evolution of VoidMain.
 - Theme: dark "glass cockpit" — near-black backgrounds (#0A0A0F), violet
   primary accent (#8A2BE2), teal secondary accent (#14E0C8), white text.
 - Typography: geometric sans (Schibsted Grotesk / IBM Plex Sans / Inter).
@@ -32,7 +32,7 @@ deck. Do NOT invent facts that are not in this brief.
 **Title:** voidmain
 **Subtitle:** Adaptive Intelligent IoT Systems — many sensors, one brain,
 coordinated responses.
-**Tagline strip:** Farlands Innovation Mission 7 · Built on the ULTRON IoT
+**Tagline strip:** Farlands Innovation Mission 7 · Built on the VoidMain IoT
 security platform
 **Visual:** Large centered wordmark "voidmain" with a violet→teal gradient;
 behind it, a faint animated-looking node graph (sensors connected to a central
@@ -80,7 +80,7 @@ Sensors / Events (real ESP32 adapters or clearly-labelled simulators)
 Event Normalization (versioned schema: event_id, timestamp, source,
         simulation flag, quality)
         ↓
-MQTT broker (localhost Mosquitto — ultron/events, decisions, commands, acks)
+MQTT broker (localhost Mosquitto — voidmain/events, decisions, commands, acks)
         ↓
 Decision Engine (rules + risk fusion 0–100 → GREEN/YELLOW/RED/PURPLE)
         ↓
@@ -128,9 +128,9 @@ shows ≥2 inputs driving ≥2 outputs through one explainable decision.
 | Functionality | Full loop: sensor → decision → world change → ack → log |
 | Intelligent decision-making | Deterministic rules + explainable risk fusion |
 **Plus a footer strip:** "Simulated sensors clearly labelled · No cloud ·
-Local-only · Dashboard preserved from ULTRON · Works without physical
+Local-only · Dashboard preserved from VoidMain · Works without physical
 hardware."
-**Visual:** Checklist-style rows with teal checkmarks; ULTRON badge lineage
+**Visual:** Checklist-style rows with teal checkmarks; VoidMain badge lineage
 mark bottom-right.
 **Speaker notes:** Constraints allow physical or simulated sensor data — our
 simulated inputs are explicitly flagged in every event payload, and the same
@@ -144,11 +144,11 @@ decision engine will drive physical ESP32 hardware via adapters later.
 - **Stage 2 — Functional Solution:** full multi-input → multi-output
   coordination demo; acknowledgements, stale handling, end-to-end tests.
 - **Stage 3 — Innovation (optional):** anomaly detection, pattern analysis,
-  prediction on the event history using the ULTRON risk engine.
+  prediction on the event history using the VoidMain risk engine.
 - Closing line: **Reliability over feature count — one complete,
   observable, repeatable control loop first.**
 **Visual:** Horizontal 3-step progress bar; Stage 1 fully filled violet,
-Stage 2 outlined, Stage 3 dashed/teal. Small ULTRON → voidmain evolution
+Stage 2 outlined, Stage 3 dashed/teal. Small VoidMain → voidmain evolution
 arrow. Team + contact footer.
 **Speaker notes:** Stage 1 is complete and demonstrated today; Stage 2 adds
 coordination depth; Stage 3 adds adaptive intelligence on top of a proven,
@@ -161,7 +161,7 @@ reliable loop.
 
 - Mission 7 text is verbatim from the official Farlands problem-statements PDF:
   *"Connected Infrastructure: Adaptive Intelligent IoT Systems."*
-- ULTRON lineage facts used: MQTT topics (`ultron/events|decisions|commands|
+- VoidMain lineage facts used: MQTT topics (`voidmain/events|decisions|commands|
   acks|status`), risk bands GREEN 0–29 / YELLOW 30–59 / RED 60–84 / PURPLE
   85–100, SQLite evidence, premium dashboard preserved unchanged.
 - Honesty rules baked in: simulated readings labelled `simulated`, no claimed

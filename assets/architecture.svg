@@ -57,7 +57,7 @@
   <g>
     <rect x="40" y="456" width="330" height="110" class="stage"/>
     <text x="64" y="490" class="ttl">③ MQTT broker (local)</text>
-    <text x="64" y="518" class="sub">ultron/events · decisions</text>
+    <text x="64" y="518" class="sub">voidmain/events · decisions</text>
     <text x="64" y="540" class="sub">commands · acks · status</text>
   </g>
 
@@ -100,7 +100,7 @@
     <rect x="920" y="456" width="240" height="120" class="stage"/>
     <text x="944" y="490" class="ttl">⑧ Dashboard</text>
     <text x="944" y="518" class="sub">operator console</text>
-    <text x="944" y="540" class="sub">live · preserved from ULTRON</text>
+    <text x="944" y="540" class="sub">live · preserved from VoidMain</text>
   </g>
 
   <!-- edges -->

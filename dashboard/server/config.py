@@ -1,4 +1,4 @@
-"""ULTRON dashboard server configuration (env-driven).
+"""VoidMain dashboard server configuration (env-driven).
 
 Owning node: Pi4 — GOVERNANCE. No secrets in code; everything via env, with
 dev-safe defaults so the same tree runs on a laptop and on the Pi4.
@@ -18,7 +18,7 @@ _DASHBOARD_DIR = _SERVER_DIR.parent
 
 
 def _default_dist() -> Path:
-    env = os.environ.get("ULTRON_DIST")
+    env = os.environ.get("VOIDMAIN_DIST")
     if env:
         return Path(env)
     for cand in (_DASHBOARD_DIR / "dist", _DASHBOARD_DIR / "web" / "dist"):
@@ -40,45 +40,52 @@ def _b(name: str, default: bool = False) -> bool:
 
 @dataclass(frozen=True)
 class Config:
-    http_host: str = os.environ.get("ULTRON_HTTP_HOST", "0.0.0.0")
-    http_port: int = int(os.environ.get("ULTRON_HTTP_PORT", "8080"))
+    http_host: str = os.environ.get("VOIDMAIN_HTTP_HOST", "0.0.0.0")
+    http_port: int = int(os.environ.get("VOIDMAIN_HTTP_PORT", "8080"))
 
-    mqtt_host: str = os.environ.get("ULTRON_MQTT_HOST", "127.0.0.1")
-    mqtt_port: int = int(os.environ.get("ULTRON_MQTT_PORT", "1883"))
-    mqtt_user: str = os.environ.get("ULTRON_MQTT_USER", "dash")
-    mqtt_pass: str = os.environ.get("ULTRON_MQTT_PASS", "")
+    mqtt_host: str = os.environ.get("VOIDMAIN_MQTT_HOST", "127.0.0.1")
+    mqtt_port: int = int(os.environ.get("VOIDMAIN_MQTT_PORT", "1883"))
+    mqtt_user: str = os.environ.get("VOIDMAIN_MQTT_USER", "dash")
+    mqtt_pass: str = os.environ.get("VOIDMAIN_MQTT_PASS", "")
 
-    evidence_db: Path = Path(os.environ.get("ULTRON_EVIDENCE_DB", "/mnt/pendrive/ultron/ultron.db"))
+    evidence_db: Path = Path(os.environ.get("VOIDMAIN_EVIDENCE_DB", "/mnt/pendrive/voidmain/voidmain.db"))
     dist_dir: Path = field(default_factory=_default_dist)
     debug_html: Path = field(default_factory=_default_debug_html)
 
     # /debug.html gating: enabled globally, or only from the mgmt subnet with basic auth.
-    debug_enabled: bool = _b("ULTRON_DEBUG", False)
-    mgmt_subnet: str = os.environ.get("ULTRON_MGMT_SUBNET", "192.168.50.0/24")
-    debug_user: str = os.environ.get("ULTRON_DEBUG_USER", "admin")
-    debug_pass: str = os.environ.get("ULTRON_DEBUG_PASS", "")
+    debug_enabled: bool = _b("VOIDMAIN_DEBUG", False)
+    mgmt_subnet: str = os.environ.get("VOIDMAIN_MGMT_SUBNET", "192.168.50.0/24")
+    debug_user: str = os.environ.get("VOIDMAIN_DEBUG_USER", "admin")
+    debug_pass: str = os.environ.get("VOIDMAIN_DEBUG_PASS", "")
 
     # TLS (CP6)
     tls_cert: Path | None = field(default_factory=lambda: (
-        Path(p) if (p := os.environ.get("ULTRON_TLS_CERT")) else None
+        Path(p) if (p := os.environ.get("VOIDMAIN_TLS_CERT")) else None
     ))
     tls_key: Path | None = field(default_factory=lambda: (
-        Path(p) if (p := os.environ.get("ULTRON_TLS_KEY")) else None
+        Path(p) if (p := os.environ.get("VOIDMAIN_TLS_KEY")) else None
     ))
-    https_port: int = int(os.environ.get("ULTRON_HTTPS_PORT", "443"))
-    redirect_http: bool = _b("ULTRON_REDIRECT_HTTP", True)
+    https_port: int = int(os.environ.get("VOIDMAIN_HTTPS_PORT", "443"))
+    redirect_http: bool = _b("VOIDMAIN_REDIRECT_HTTP", True)
 
     # Auth (CP4)
-    auth_db: Path = Path(os.environ.get("ULTRON_AUTH_DB",
+    auth_db: Path = Path(os.environ.get("VOIDMAIN_AUTH_DB",
                                          str(_DASHBOARD_DIR / "auth.db")))
-    rp_id: str = os.environ.get("ULTRON_RP_ID", "localhost")
-    rp_name: str = os.environ.get("ULTRON_RP_NAME", "ULTRON")
+    rp_id: str = os.environ.get("VOIDMAIN_RP_ID", "localhost")
+    rp_name: str = os.environ.get("VOIDMAIN_RP_NAME", "VoidMain")
     origins: list[str] = field(default_factory=lambda: [
         o.strip() for o in os.environ.get(
-            "ULTRON_ORIGINS", "http://localhost:8080"
+            "VOIDMAIN_ORIGINS", "http://localhost:8080"
         ).split(",") if o.strip()
     ])
-    session_ttl: int = int(os.environ.get("ULTRON_SESSION_TTL", "3600"))
+    session_ttl: int = int(os.environ.get("VOIDMAIN_SESSION_TTL", "3600"))
+
+    # Google sign-in (OIDC ID token from Google Identity Services)
+    google_client_id: str = os.environ.get("GOOGLE_CLIENT_ID", "")
+    owner_emails: list[str] = field(default_factory=lambda: [
+        e.strip() for e in os.environ.get("VOIDMAIN_OWNER_EMAILS", "").split(",")
+        if e.strip()
+    ])
 
     version: str = VERSION
 
@@ -106,19 +113,19 @@ def _validate(cfg: "Config") -> None:
             "localhost", "127.0.0.1", "::1",
         ):
             raise ConfigError(
-                f"ULTRON_ORIGINS contains non-localhost http:// origin: {origin}"
+                f"VOIDMAIN_ORIGINS contains non-localhost http:// origin: {origin}"
             )
 
     if cfg.debug_enabled:
         if cfg.rp_id not in ("localhost", "127.0.0.1", "::1"):
             raise ConfigError(
-                f"ULTRON_DEBUG=1 with non-localhost RP ID '{cfg.rp_id}' is unsafe"
+                f"VOIDMAIN_DEBUG=1 with non-localhost RP ID '{cfg.rp_id}' is unsafe"
             )
 
     try:
         _ip.ip_address(cfg.rp_id)
         raise ConfigError(
-            f"ULTRON_RP_ID must be a hostname, not an IP address: {cfg.rp_id}"
+            f"VOIDMAIN_RP_ID must be a hostname, not an IP address: {cfg.rp_id}"
         )
     except ValueError:
         pass  # not an IP — that's correct
@@ -126,7 +133,7 @@ def _validate(cfg: "Config") -> None:
     if cfg.tls_cert or cfg.tls_key:
         if not (cfg.tls_cert and cfg.tls_key):
             raise ConfigError(
-                "Both ULTRON_TLS_CERT and ULTRON_TLS_KEY must be set together"
+                "Both VOIDMAIN_TLS_CERT and VOIDMAIN_TLS_KEY must be set together"
             )
         if not cfg.tls_cert.exists():
             raise ConfigError(f"TLS cert not found: {cfg.tls_cert}")

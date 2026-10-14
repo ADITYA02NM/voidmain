@@ -4,7 +4,7 @@ Contract (dashboard.md §5): envelope {t, ts, d}, t in
 alert|score|band|health|lan|tripwire|history|toast|event. ts is stamped at
 MQTT-receive time. suricata/wifi are surfaced as t:"event" with structured
 fields (topic, node, kind, sev, summary + whitelisted src_ip/dest_ip/mac/sig_id).
-Alerts come only from ultron/alert/# (owned by Pi3b).
+Alerts come only from voidmain/alert/# (owned by Pi3b).
 """
 
 from __future__ import annotations
@@ -23,18 +23,18 @@ try:
 except ImportError:  # pragma: no cover
     aiomqtt = None  # type: ignore[assignment]
 
-LOG = logging.getLogger("ultron.bridge")
+LOG = logging.getLogger("voidmain.bridge")
 
 # The subscribe allowlist — exactly dashboard.md §5. Nothing outside this.
 SUB_TOPICS: tuple[str, ...] = (
-    "ultron/health/#",
-    "ultron/alert/#",
-    "ultron/risk/score",
-    "ultron/risk/band",
-    "ultron/lan/#",
-    "ultron/tripwire/#",
-    "ultron/suricata/#",
-    "ultron/wifi/#",
+    "voidmain/health/#",
+    "voidmain/alert/#",
+    "voidmain/risk/score",
+    "voidmain/risk/band",
+    "voidmain/lan/#",
+    "voidmain/tripwire/#",
+    "voidmain/suricata/#",
+    "voidmain/wifi/#",
 )
 
 VALID_T = {"alert", "score", "band", "health", "lan", "tripwire", "history", "toast", "event"}
@@ -55,40 +55,40 @@ def map_message(topic: str, payload: bytes) -> dict[str, Any] | None:
     """MQTT (topic, payload) -> {t, d} or None if not mappable."""
     data = _loads(payload)
 
-    if topic == "ultron/risk/score":
+    if topic == "voidmain/risk/score":
         v = data.get("v", data.get("score")) if isinstance(data, dict) else data
         try:
             return {"t": "score", "d": {"v": int(round(float(v)))}}
         except (TypeError, ValueError):
             return None
 
-    if topic == "ultron/risk/band":
+    if topic == "voidmain/risk/band":
         b = data.get("b", data.get("band")) if isinstance(data, dict) else data
         b = str(b).upper()
         return {"t": "band", "d": {"b": b}} if b in ("GREEN", "YELLOW", "RED", "PURPLE") else None
 
-    if topic.startswith("ultron/alert/"):
+    if topic.startswith("voidmain/alert/"):
         d = data if isinstance(data, dict) else {"body": str(data)}
         d.setdefault("id", _leaf(topic))
         d.setdefault("sev", "info")
         d.setdefault("ack", False)
         return {"t": "alert", "d": d}
 
-    if topic.startswith("ultron/health/"):
+    if topic.startswith("voidmain/health/"):
         d = data if isinstance(data, dict) else {}
         d.setdefault("node", _leaf(topic))
         return {"t": "health", "d": d}
 
-    if topic.startswith("ultron/lan/"):
+    if topic.startswith("voidmain/lan/"):
         return {"t": "lan", "d": data if isinstance(data, dict) else {}}
 
-    if topic.startswith("ultron/tripwire/"):
+    if topic.startswith("voidmain/tripwire/"):
         d = data if isinstance(data, dict) else {}
         d.setdefault("node", _leaf(topic))
         d.setdefault("edge", "open")
         return {"t": "tripwire", "d": d}
 
-    if topic.startswith("ultron/suricata/"):
+    if topic.startswith("voidmain/suricata/"):
         d = data if isinstance(data, dict) else {}
         sev = d.get("severity", d.get("sev", "info"))
         summary = d.get("signature", d.get("title", "Suricata IDS alert"))
@@ -101,7 +101,7 @@ def map_message(topic: str, payload: bytes) -> dict[str, Any] | None:
                 ev[k] = d[k]
         return {"t": "event", "d": ev}
 
-    if topic.startswith("ultron/wifi/"):
+    if topic.startswith("voidmain/wifi/"):
         d = data if isinstance(data, dict) else {}
         sev = d.get("severity", d.get("sev", "info"))
         summary = d.get("title", d.get("detail", "WiFi anomaly"))
@@ -163,7 +163,7 @@ class Bridge:
         self._stop = asyncio.Event()
 
     async def publish_ack(self, alert_id: str) -> bool:
-        """Publish an operator ACK to ultron/ack/{id}. Never touches risk/#."""
+        """Publish an operator ACK to voidmain/ack/{id}. Never touches risk/#."""
         if self._client is None or not self.connected:
             return False
         safe = re.sub(r"[^A-Za-z0-9_.:-]", "", alert_id)[:128]
@@ -171,7 +171,7 @@ class Bridge:
             return False
         payload = json.dumps({"id": safe, "ts": int(time.time()), "op": "dashboard"})
         try:
-            await self._client.publish(f"ultron/ack/{safe}", payload.encode("utf-8"), qos=1)
+            await self._client.publish(f"voidmain/ack/{safe}", payload.encode("utf-8"), qos=1)
             return True
         except Exception as exc:  # noqa: BLE001
             LOG.warning("ack publish failed for %s: %s", safe, exc)

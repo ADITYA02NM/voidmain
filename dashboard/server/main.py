@@ -1,14 +1,14 @@
-"""ULTRON dashboard web server (Pi4 — GOVERNANCE).
+"""VoidMain dashboard web server (Pi4 — GOVERNANCE).
 
 Routes: /  /assets/*  /debug.html  /ws  /healthz  /auth/*
 (+ /favicon.ico and a SPA fallback — justified in use.md).
 
 Serves the built React app, bridges MQTT<->/ws, replays history + acked alerts
-on join, handles ACK and clock-sync control frames. Never writes ultron/risk/#.
+on join, handles ACK and clock-sync control frames. Never writes voidmain/risk/#.
 WebSocket upgrade requires valid session + Origin header.
 
-TLS: when ULTRON_TLS_CERT + ULTRON_TLS_KEY are set, serves HTTPS on
-ULTRON_HTTPS_PORT (default 443). Plain HTTP on ULTRON_HTTP_PORT redirects
+TLS: when VOIDMAIN_TLS_CERT + VOIDMAIN_TLS_KEY are set, serves HTTPS on
+VOIDMAIN_HTTPS_PORT (default 443). Plain HTTP on VOIDMAIN_HTTP_PORT redirects
 to the HTTPS origin with 301.
 """
 
@@ -34,7 +34,7 @@ from .bridge import Bridge, Hub, envelope
 from .config import Config, load
 from .ws_session import SessionWsManager
 
-LOG = logging.getLogger("ultron.main")
+LOG = logging.getLogger("voidmain.main")
 _START = time.monotonic()
 
 
@@ -68,7 +68,7 @@ def _debug_gate(request: web.Request, cfg: Config) -> None:
         raise web.HTTPNotFound()
     if cfg.debug_pass:
         if not _check_basic(request, cfg.debug_user, cfg.debug_pass):
-            raise web.HTTPUnauthorized(headers={"WWW-Authenticate": 'Basic realm="ultron"'})
+            raise web.HTTPUnauthorized(headers={"WWW-Authenticate": 'Basic realm="voidmain"'})
     elif not cfg.debug_enabled:
         # Reached via mgmt subnet but no password configured -> fail safe.
         raise web.HTTPNotFound()
@@ -262,6 +262,8 @@ def create_app(cfg: Config | None = None) -> web.Application:
     app["auth_rp_name"] = cfg.rp_name
     app["auth_origins"] = cfg.origins
     app["auth_secure_cookies"] = cfg.tls_enabled
+    app["google_client_id"] = cfg.google_client_id
+    app["owner_emails"] = cfg.owner_emails
     session_mgr = SessionWsManager()
     app["session_mgr"] = session_mgr
 
@@ -337,7 +339,7 @@ async def _run_tls(cfg: Config) -> None:
 
 
 def main() -> None:
-    logging.basicConfig(level=os.environ.get("ULTRON_LOG", "INFO"),
+    logging.basicConfig(level=os.environ.get("VOIDMAIN_LOG", "INFO"),
                         format="%(asctime)s %(levelname)s %(name)s %(message)s")
     if os.name == "nt":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())

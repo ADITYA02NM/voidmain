@@ -22,8 +22,10 @@ def csp_app(*, tls: bool = False, rp_id: str = "localhost", https_port: int = 44
     else:
         ws_src = "ws: wss:"
     return (
-        f"default-src 'self'; script-src 'self'; style-src 'self'; "
-        f"connect-src 'self' {ws_src}; img-src 'self' data:; "
+        f"default-src 'self'; script-src 'self' https://accounts.google.com; "
+        f"style-src 'self'; "
+        f"connect-src 'self' {ws_src}; img-src 'self' data: https://*.googleusercontent.com; "
+        f"frame-src https://accounts.google.com; "
         f"base-uri 'self'; frame-ancestors 'none'"
     )
 
@@ -52,8 +54,10 @@ def build_csp_for_html(
     else:
         ws_src = "ws: wss:"
     return (
-        f"default-src 'self'; script-src {script_src}; style-src {style_src}; "
-        f"connect-src 'self' {ws_src}; img-src 'self' data:; "
+        f"default-src 'self'; script-src {script_src} https://accounts.google.com; "
+        f"style-src {style_src}; "
+        f"connect-src 'self' {ws_src}; img-src 'self' data: https://*.googleusercontent.com; "
+        f"frame-src https://accounts.google.com; "
         f"base-uri 'self'; frame-ancestors 'none'"
     )
 

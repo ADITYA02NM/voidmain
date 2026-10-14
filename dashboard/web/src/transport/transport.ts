@@ -97,7 +97,7 @@ export class Transport {
       if (!batch.length) return;
       const th0 = performance.now();
       store.applyBatch(batch);
-      const perf = (window as unknown as { __ultronPerf?: { handler: number[] } }).__ultronPerf;
+      const perf = (window as unknown as { __voidmainPerf?: { handler: number[] } }).__voidmainPerf;
       if (perf) {
         const per = (performance.now() - th0) / batch.length;
         for (let i = 0; i < batch.length; i++) perf.handler.push(per);

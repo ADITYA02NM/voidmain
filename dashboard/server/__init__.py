@@ -1,1 +1,1 @@
-"""ULTRON dashboard server package (Pi4 — GOVERNANCE)."""
+"""VoidMain dashboard server package (Pi4 — GOVERNANCE)."""

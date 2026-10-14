@@ -80,7 +80,7 @@ SPECIMEN_FACES = [
     ("IBM Plex Sans", ["Arial", "Liberation Sans"], "arial.ttf",
      [("ibm-plex-sans-var.woff2", "400 700", "normal")]),
 ]
-SAMPLE = "The quick brown fox jumps over the lazy dog 0123456789 ULTRON risk band"
+SAMPLE = "The quick brown fox jumps over the lazy dog 0123456789 VoidMain risk band"
 
 
 def _width(font, text):

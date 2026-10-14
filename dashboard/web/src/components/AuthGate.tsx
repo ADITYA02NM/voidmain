@@ -14,7 +14,7 @@ function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <main className="auth-screen">
       <section className="auth-hero">
-        <h1 className="auth-logo">ULT<b>RON</b></h1>
+        <h1 className="auth-logo">Void<b>Main</b></h1>
         <p className="auth-subtitle">Detect → govern → alert for the smart-home IoT layer. Zero cloud.</p>
         <div className="auth-action">{children}</div>
         <ul className="auth-trust">

@@ -28,7 +28,7 @@ function IndicatorTwinImpl() {
       ctx.fillStyle = oledBg; ctx.fillRect(0, 0, 128, 64);
       ctx.fillStyle = oledFg;
       ctx.font = "8px ui-monospace, monospace"; ctx.textBaseline = "top";
-      ctx.fillText("ULTRON", 3, 3);
+      ctx.fillText("VoidMain", 3, 3);
       ctx.fillText(s.band, 128 - s.band.length * 6 - 3, 3);
       ctx.font = "bold 30px ui-monospace, monospace";
       ctx.fillText(String(Math.round(s.score)), 6, 20);

@@ -17,7 +17,7 @@ try:
 except ImportError:  # pragma: no cover
     aiosqlite = None  # type: ignore[assignment]
 
-LOG = logging.getLogger("ultron.db")
+LOG = logging.getLogger("voidmain.db")
 
 HISTORY_SECONDS = 24 * 60 * 60
 RECENT_ALERT_LIMIT = 200

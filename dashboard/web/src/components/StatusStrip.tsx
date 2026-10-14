@@ -19,7 +19,7 @@ function StatusStripImpl() {
       <span className="ss-cell ss-decay">governance: −2 pts / 10s → baseline 0</span>
       <span className="ss-sep" />
       <span className="ss-cell">MQTT <span className="num">127.0.0.1:1883</span></span>
-      <span className="ss-cell">evidence <span className="num">/mnt/pendrive/ultron/ultron.db</span></span>
+      <span className="ss-cell">evidence <span className="num">/mnt/pendrive/voidmain/voidmain.db</span></span>
     </div>
   );
 }

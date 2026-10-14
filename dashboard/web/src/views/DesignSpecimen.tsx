@@ -91,7 +91,7 @@ function EventRows({ band }: { band: Band }) {
 function HeaderBar({ band }: { band: Band }) {
   return (
     <div className="sp-header">
-      <span className="sp-wordmark">ULT<b>RON</b></span>
+      <span className="sp-wordmark">Void<b>Main</b></span>
       <span className="sp-live"><span className="sp-led" /> LIVE</span>
       <span className="sp-spacer" />
       <span className="sp-pill">{band}</span>
@@ -167,7 +167,7 @@ export default function DesignSpecimen() {
   return (
     <div className="sp-page">
       <div className="sp-controls">
-        <h1 className="sp-title">ULTRON Font Specimen — Intelligence Brief</h1>
+        <h1 className="sp-title">VoidMain Font Specimen — Intelligence Brief</h1>
         <div className="sp-band-switch">
           {BANDS.map(b => (
             <button key={b} className={`sp-band-btn ${activeBand === b ? "active" : ""}`}

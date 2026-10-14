@@ -9,19 +9,19 @@ import type { Band } from "./contracts/ws";
 
 const q = new URLSearchParams(location.search);
 if (q.get("perf")) {
-  const g = window as unknown as { __ultronPerf: { handler: number[] }; __ultronRC: Record<string, number> };
-  g.__ultronPerf = { handler: [] };
-  g.__ultronRC = {};
+  const g = window as unknown as { __voidmainPerf: { handler: number[] }; __voidmainRC: Record<string, number> };
+  g.__voidmainPerf = { handler: [] };
+  g.__voidmainRC = {};
 }
 
 const seedParam = q.get("seed");
 
-const w = window as unknown as { __ultron?: unknown };
+const w = window as unknown as { __voidmain?: unknown };
 if (import.meta.env.DEV && (q.get("perf") || seedParam)) {
-  w.__ultron = { store };
+  w.__voidmain = { store };
 } else if (q.get("perf")) {
   // Production ?perf: read-only metrics snapshot, no store handle.
-  w.__ultron = Object.freeze({
+  w.__voidmain = Object.freeze({
     metrics: () => {
       const s = store.getState();
       return Object.freeze({
