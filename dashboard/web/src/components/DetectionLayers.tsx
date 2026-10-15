@@ -21,10 +21,10 @@ function DetectionLayersImpl() {
   }, [layers.tripSeq, reduce]);
 
   const rows = [
-    { k: "ids", name: "IDS", lit: layers.idsCount > 0, val: `${layers.idsCount} alerts · last ${ago(layers.idsLast, now)}` },
-    { k: "lan", name: "LAN Watch", lit: layers.lanToday > 0, val: `${layers.lanToday} unknown today` },
-    { k: "wifi", name: "WiFi", lit: layers.wifiLast > 0, val: `${layers.wifiRogue ? "rogue flag" : "clear"} · last ${ago(layers.wifiLast, now)}` },
-    { k: "trip", name: "Tripwire", lit: layers.tripLast > 0, val: `armed · last ${ago(layers.tripLast, now)}` },
+    { k: "ids", name: "Sensors", lit: layers.idsCount > 0, val: `${layers.idsCount} events · last ${ago(layers.idsLast, now)}` },
+    { k: "lan", name: "Devices", lit: layers.lanToday > 0, val: `${layers.lanToday} active today` },
+    { k: "wifi", name: "Anomalies", lit: layers.wifiLast > 0, val: `${layers.wifiRogue ? "flagged" : "clear"} · last ${ago(layers.wifiLast, now)}` },
+    { k: "trip", name: "Automations", lit: layers.tripLast > 0, val: `armed · last ${ago(layers.tripLast, now)}` },
   ];
 
   return (

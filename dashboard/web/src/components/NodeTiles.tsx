@@ -5,10 +5,10 @@ import { useNow } from "../hooks/useNow";
 import { uptime } from "../lib/format";
 
 const DEF = [
-  { id: "pi4", nm: "Pi4", pil: "Governance", ip: "192.168.100.1", svc: ["mosquitto", "risk", "dashboard", "heal"] },
-  { id: "pi3a", nm: "Pi3a", pil: "Detection", ip: "192.168.100.2", svc: ["suricata", "lan", "agg"] },
+  { id: "pi4", nm: "Pi4", pil: "Core", ip: "192.168.100.1", svc: ["mosquitto", "risk", "dashboard", "heal"] },
+  { id: "pi3a", nm: "Pi3a", pil: "Sensors", ip: "192.168.100.2", svc: ["mqtt", "iot", "agg"] },
   { id: "pi3b", nm: "Pi3b", pil: "Alert", ip: "192.168.100.3", svc: ["alert", "report"] },
-  { id: "esp32", nm: "ESP32", pil: "Indicator+Tripwire", ip: "USB / GPIO", svc: ["C3 OLED/LED", "WROOM reed"] },
+  { id: "esp32", nm: "ESP32", pil: "Indicator+Actuator", ip: "USB / GPIO", svc: ["C3 OLED/LED", "WROOM relay"] },
 ];
 
 const STATE: Record<string, string> = { up: "up", warn: "stale", down: "down", "": "no data" };

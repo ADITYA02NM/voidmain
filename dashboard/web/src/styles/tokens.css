@@ -20,7 +20,6 @@
 
   /* Banner (degraded state) */
   --banner-text: #ffd7d7;
-  --qr-bg: #fff;
 
   /* Chrome overlays and states */
   --header-bg: rgba(16,14,12,.94);
@@ -95,11 +94,12 @@
   --posture-max-w: 220px;
   --detail-w: 200px;
   --auth-card-w: 380px;
-  --qr-size: 220px;
   --hero-pad: 96px;
   --hero-visual-w: 720px;
   --measure: 34ch;
   --dialog-w: 480px;
+  --iot-panel-w: 720px;
+  --iot-card-min-w: 180px;
   --footer-max-w: 1400px;
   --spark-h: 150px;
   --spark-h-compact: 80px;
@@ -120,6 +120,7 @@
   --blur-sm: 3px;
   --blur-md: 6px;
   --radius-pill: 10px;
+  --radius-full: 999px;
   --stroke: 1.5;
   --stroke-heavy: 2;
   --enter-offset: 6px;
@@ -141,29 +142,7 @@
   --dur-sweep: 400ms;
   --dur-flash: 800ms;
   --dur-pulse: 1.5s;
-  --dur-fast: 100ms;
-  --dur-slow: 300ms;
-  --dur-node: 3s;
-  --dur-breathe: 4s;
-  --dur-spin: 700ms;
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
-
-  /* Extra sizes for landing / modal */
-  --space-8: 48px;
-  --modal-min-w: 320px;
-  --modal-max-w: 420px;
-  --spinner-size: 36px;
-  --spinner-border: 3px;
-  --land-glow-blur: 32px;
-  --land-glow-blur-hover: 56px;
-  --modal-shadow-blur: 80px;
-  --node-glow-sm: 8px;
-  --node-glow-lg: 20px;
-  --modal-slide-offset: 24px;
-  --modal-backdrop-blur: 8px;
-
-  /* Semantic colours (not in @supports block — kept as raw only in :root) */
-  --err: #ff6b6b;
 }
 
 @supports (color: oklch(0 0 0)) {

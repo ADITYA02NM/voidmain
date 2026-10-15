@@ -1,150 +1,83 @@
-import { memo, useCallback, useEffect, useState } from "react";
-import { useStore } from "../store/store";
-import { store } from "../store/store";
+import { memo } from "react";
+import { useStore, store } from "../store/store";
+import type { IoTDevice } from "../store/store";
 
-interface CredentialInfo {
-  id: string;
-  created_at: number | null;
-  last_used_at: number | null;
-  revoked: boolean;
-  sign_count: number;
-}
+const ICONS: Record<string, string> = {
+  lock: "🔒", light: "💡", thermostat: "🌡️", garage: "🚪",
+  plug: "🔌", motion: "📡", smoke: "🔥", leak: "💧",
+  camera: "🎥", purifier: "🌿", curtain: "🪟",
+};
 
-function b64ToBuf(b64: string): ArrayBuffer {
-  const s = b64.replace(/-/g, "+").replace(/_/g, "/");
-  const pad = s.length % 4 === 0 ? "" : "=".repeat(4 - (s.length % 4));
-  const raw = atob(s + pad);
-  const buf = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) buf[i] = raw.charCodeAt(i);
-  return buf.buffer;
-}
+function DeviceCard({ d }: { d: IoTDevice }) {
+  const toggle = () => {
+    if (d.kind === "lock" || d.kind === "garage") {
+      store.applyBatch([{
+        t: "device", ts: Date.now() / 1000,
+        d: { ...d, locked: !d.locked, state: d.locked ? "Unlocked" : "Locked", sev: "green", automation: undefined },
+      } as never]);
+    } else if (["light", "plug", "purifier", "curtain"].includes(d.kind)) {
+      store.applyBatch([{
+        t: "device", ts: Date.now() / 1000,
+        d: { ...d, on: !d.on, state: d.on ? "Off" : "On", sev: "green", automation: undefined },
+      } as never]);
+    }
+  };
 
-function bufToB64(buf: ArrayBuffer): string {
-  const bytes = new Uint8Array(buf);
-  let s = "";
-  for (const b of bytes) s += String.fromCharCode(b);
-  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
+  const canToggle = ["lock", "garage", "light", "plug", "purifier", "curtain"].includes(d.kind);
 
-function fmtDate(epoch: number | null): string {
-  if (!epoch) return "—";
-  return new Date(epoch * 1000).toISOString().slice(0, 19).replace("T", " ");
+  return (
+    <div className={`iot-card iot-card--${d.sev}`}>
+      <div className="iot-card-hd">
+        <span className="iot-icon">{ICONS[d.kind] ?? "📡"}</span>
+        <span className="iot-name">{d.name}</span>
+        <span className={`iot-dot iot-dot--${d.sev}`} />
+      </div>
+      <div className="iot-room">{d.room}</div>
+      <div className="iot-state">{d.state}</div>
+      {d.automation && <div className="iot-auto">{d.automation}</div>}
+      {canToggle && (
+        <button className="iot-toggle" onClick={toggle}>
+          {d.kind === "lock" || d.kind === "garage"
+            ? (d.locked ? "Unlock" : "Lock")
+            : (d.on ? "Turn off" : "Turn on")}
+        </button>
+      )}
+    </div>
+  );
 }
 
 function DevicesPanelImpl() {
   const show = useStore((s) => s.showDevices);
-  const [creds, setCreds] = useState<CredentialInfo[]>([]);
-  const [status, setStatus] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const refresh = useCallback(async () => {
-    try {
-      const r = await fetch("/auth/credentials");
-      if (!r.ok) throw new Error("Failed to load");
-      setCreds(await r.json());
-      setStatus("");
-    } catch (e: any) {
-      setStatus(e.message);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (show) refresh();
-  }, [show, refresh]);
+  const iot = useStore((s) => s.iot);
 
   if (!show) return null;
 
-  async function handleAdd() {
-    setBusy(true);
-    setStatus("Starting registration...");
-    try {
-      const r = await fetch("/auth/register/begin", { method: "POST",
-        headers: { "Content-Type": "application/json" }, body: "{}" });
-      if (!r.ok) throw new Error(await r.text());
-      const options = await r.json();
-      options.challenge = b64ToBuf(options.challenge);
-      options.user.id = b64ToBuf(options.user.id);
-      if (options.excludeCredentials) {
-        for (const c of options.excludeCredentials) c.id = b64ToBuf(c.id);
-      }
-      setStatus("Touch your authenticator...");
-      const cred = await navigator.credentials.create({ publicKey: options });
-      if (!cred) { setStatus("Registration cancelled"); setBusy(false); return; }
-      const pub = cred as PublicKeyCredential;
-      const resp = pub.response as AuthenticatorAttestationResponse;
-      const body = {
-        id: pub.id,
-        rawId: bufToB64(pub.rawId),
-        type: pub.type,
-        response: {
-          attestationObject: bufToB64(resp.attestationObject),
-          clientDataJSON: bufToB64(resp.clientDataJSON),
-        },
-        authenticatorAttachment: (pub as any).authenticatorAttachment ?? "platform",
-        clientExtensionResults: pub.getClientExtensionResults(),
-      };
-      const cr = await fetch("/auth/register/complete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!cr.ok) throw new Error(await cr.text());
-      setStatus("Device added");
-      await refresh();
-    } catch (e: any) {
-      setStatus(e.message || "Registration failed");
-    }
-    setBusy(false);
-  }
-
-  async function handleRevoke(id: string) {
-    setBusy(true);
-    setStatus("");
-    try {
-      const r = await fetch(`/auth/credentials/${encodeURIComponent(id)}`, { method: "DELETE" });
-      if (!r.ok) {
-        const text = await r.text();
-        throw new Error(text);
-      }
-      setStatus("Credential revoked");
-      await refresh();
-    } catch (e: any) {
-      setStatus(e.message || "Revoke failed");
-    }
-    setBusy(false);
-  }
+  const list = Object.values(iot).sort((a, b) => a.name.localeCompare(b.name));
+  const counts = {
+    green: list.filter((d) => d.sev === "green").length,
+    yellow: list.filter((d) => d.sev === "yellow").length,
+    red: list.filter((d) => d.sev === "red").length,
+    purple: list.filter((d) => d.sev === "purple").length,
+  };
 
   return (
     <div className="devices-overlay" onClick={() => store.setShowDevices(false)}>
-      <div className="devices-panel" onClick={(e) => e.stopPropagation()}>
+      <div className="devices-panel iot-panel" onClick={(e) => e.stopPropagation()}>
         <div className="devices-hd">
-          <span className="label">REGISTERED DEVICES</span>
+          <span className="label">IoT DEVICES</span>
+          <div className="iot-legend">
+            <span className="iot-legend-item"><span className="iot-dot iot-dot--green" /> {counts.green}</span>
+            <span className="iot-legend-item"><span className="iot-dot iot-dot--yellow" /> {counts.yellow}</span>
+            <span className="iot-legend-item"><span className="iot-dot iot-dot--red" /> {counts.red}</span>
+            <span className="iot-legend-item"><span className="iot-dot iot-dot--purple" /> {counts.purple}</span>
+          </div>
           <button className="devices-close" onClick={() => store.setShowDevices(false)} aria-label="Close">&times;</button>
         </div>
-        <div className="devices-list">
-          {creds.map((c) => (
-            <div key={c.id} className={`devices-row${c.revoked ? " revoked" : ""}`}>
-              <div className="devices-id">{c.id.slice(0, 24)}...</div>
-              <div className="devices-meta">
-                <span>Created: {fmtDate(c.created_at)}</span>
-                <span>Last used: {fmtDate(c.last_used_at)}</span>
-                <span>Count: {c.sign_count}</span>
-              </div>
-              <div className="devices-actions">
-                {c.revoked
-                  ? <span className="devices-revoked-tag">REVOKED</span>
-                  : <button className="devices-revoke-btn" disabled={busy}
-                      onClick={() => handleRevoke(c.id)}>Revoke</button>}
-              </div>
-            </div>
-          ))}
-          {creds.length === 0 && <div className="devices-empty">No credentials registered</div>}
-        </div>
-        <div className="devices-footer">
-          <button className="auth-btn" onClick={handleAdd} disabled={busy}>
-            Add Device
-          </button>
-          {status && <div className="auth-status">{status}</div>}
+        <div className="devices-list iot-grid">
+          {list.map((d) => <DeviceCard key={d.id} d={d} />)}
+          {list.length === 0 && (
+            <div className="devices-empty">No IoT devices yet — run SIM TOUR to see them</div>
+          )}
         </div>
       </div>
     </div>

@@ -10,7 +10,7 @@ import { cssVar } from "../lib/cssVars";
 const NODE_SHORT: Record<string, string> = {
   pi4: "GOV", pi3a: "DET", pi3b: "ALR", esp32: "ESP",
 };
-const FILTERS = ["all", "alerts", "suricata", "lan", "wifi", "tripwire", "unacked"] as const;
+const FILTERS = ["all", "alerts", "device", "automation", "band", "unacked"] as const;
 
 const EventRow = memo(function EventRow({ e, isNew }: { e: UEvent; isNew: boolean }) {
   const ref = useRef<HTMLDivElement>(null);

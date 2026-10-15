@@ -1,7 +1,8 @@
-// Client-side demo simulation — a paced script of synthetic envelopes that
-// exercises every live panel (score/band/history, health, LAN, tripwire,
-// suricata/wifi events, alerts + ACK, toasts, degraded banner) without any
-// server or MQTT dependency. Pure frontend: injects straight into the store.
+// Client-side demo simulation — a paced script of synthetic IoT envelopes that
+// exercises every live panel (score/band/history, health, device grid, alerts +
+// ACK, toasts, degraded banner) without any server or MQTT dependency.
+// Pure frontend: injects straight into the store. Severity story:
+//   GREEN normal → YELLOW unusual → RED alert → PURPLE automation → GREEN.
 import type { Envelope, PayloadFor } from "../contracts/ws";
 import { bandForScore } from "./bands";
 import { execCommand } from "./commands";
@@ -46,6 +47,79 @@ export class Simulation {
 
   private cmd(raw: string): void { execCommand(raw); }
 
+  private dev(id: string, name: string, kind: string, room: string, sev: string, state: string, extra: Record<string, unknown> = {}): void {
+    this.emit("device", { id, name, kind, room, sev, state, ...extra } as never);
+  }
+
+  private seedDevices(): void {
+    this.dev("door-front", "Front Door", "lock", "Entrance", "green", "Locked", { locked: true });
+    this.dev("door-back", "Back Door", "lock", "Kitchen", "green", "Locked", { locked: true });
+    this.dev("light-living", "Living Light", "light", "Living Room", "green", "On", { on: true });
+    this.dev("light-bedroom", "Bedroom Light", "light", "Bedroom", "green", "Off", { on: false });
+    this.dev("light-porch", "Porch Light", "light", "Entrance", "green", "Off", { on: false });
+    this.dev("thermostat", "Thermostat", "thermostat", "Hallway", "green", "21°C · Heat");
+    this.dev("garage", "Garage Door", "garage", "Garage", "green", "Closed", { locked: true });
+    this.dev("plug-coffee", "Coffee Plug", "plug", "Kitchen", "green", "On", { on: true });
+    this.dev("plug-desk", "Desk Plug", "plug", "Office", "green", "On", { on: true });
+    this.dev("motion-hall", "Hall Motion", "motion", "Hallway", "green", "Clear");
+    this.dev("motion-yard", "Yard Motion", "motion", "Yard", "green", "Clear");
+    this.dev("smoke-kitchen", "Kitchen Smoke", "smoke", "Kitchen", "green", "Clear");
+    this.dev("leak-utility", "Utility Leak", "leak", "Utility", "green", "Dry");
+    this.dev("camera-front", "Front Camera", "camera", "Entrance", "green", "Armed · Recording", { on: true });
+    this.dev("camera-yard", "Yard Camera", "camera", "Yard", "green", "Armed · Recording", { on: true });
+    this.dev("purifier", "Air Purifier", "purifier", "Living Room", "green", "On · Auto", { on: true });
+    this.dev("curtain", "Bedroom Curtain", "curtain", "Bedroom", "green", "Closed", { on: false });
+  }
+
+  private iotScenario(): void {
+    // Phase 1 — unusual activity (YELLOW)
+    this.dev("motion-yard", "Yard Motion", "motion", "Yard", "yellow", "Motion after hours");
+    this.dev("motion-hall", "Hall Motion", "motion", "Hallway", "yellow", "Motion detected after hours");
+    this.dev("thermostat", "Thermostat", "thermostat", "Hallway", "yellow", "24°C · Rising unexpectedly");
+    this.alert("yellow", "Unusual motion detected", "iot/motion-hall", "Hall + yard motion triggered at 02:14 — no one home");
+    this.toast("YELLOW — unusual activity", "yellow");
+  }
+
+  private iotAlertPhase(): void {
+    // Phase 2 — red: alert sent to user
+    this.dev("door-front", "Front Door", "lock", "Entrance", "red", "Opened unexpectedly", { locked: false });
+    this.dev("smoke-kitchen", "Kitchen Smoke", "smoke", "Kitchen", "red", "Smoke threshold exceeded");
+    this.dev("camera-front", "Front Camera", "camera", "Entrance", "red", "Person detected", { on: true });
+    this.alert("red", "Intrusion alert — door + camera", "iot/door-front", "Front door opened + camera person detection. Alert dispatched to owner.");
+    this.toast("RED — alerts sent to owner", "red");
+    this.target = 70;
+  }
+
+  private iotAutomationPhase(): void {
+    // Phase 3 — purple: automation executed
+    this.dev("door-front", "Front Door", "lock", "Entrance", "purple", "Auto-locked", { locked: true, automation: "Locked door remotely" });
+    this.dev("door-back", "Back Door", "lock", "Kitchen", "purple", "Auto-locked", { locked: true, automation: "Locked back door" });
+    this.dev("light-living", "Living Light", "light", "Living Room", "purple", "All lights ON", { on: true, automation: "Turned on all lights" });
+    this.dev("light-bedroom", "Bedroom Light", "light", "Bedroom", "purple", "All lights ON", { on: true, automation: "Turned on all lights" });
+    this.dev("light-porch", "Porch Light", "light", "Entrance", "purple", "All lights ON", { on: true, automation: "Turned on porch light" });
+    this.dev("camera-front", "Front Camera", "camera", "Entrance", "purple", "High-res recording", { on: true, automation: "Switched to high-res recording" });
+    this.dev("camera-yard", "Yard Camera", "camera", "Yard", "purple", "High-res recording", { on: true, automation: "Switched to high-res recording" });
+    this.dev("garage", "Garage Door", "garage", "Garage", "purple", "Locked", { locked: true, automation: "Garage secured" });
+    this.alert("purple", "Automation executed — home secured", "iot/auto", "Doors locked, lights on, cameras high-res, garage closed.");
+    this.toast("PURPLE — automation actions taken", "purple");
+  }
+
+  private iotRecoverPhase(): void {
+    this.dev("door-front", "Front Door", "lock", "Entrance", "green", "Locked", { locked: true });
+    this.dev("door-back", "Back Door", "lock", "Kitchen", "green", "Locked", { locked: true });
+    this.dev("light-living", "Living Light", "light", "Living Room", "green", "On", { on: true });
+    this.dev("light-bedroom", "Bedroom Light", "light", "Bedroom", "green", "Off", { on: false });
+    this.dev("light-porch", "Porch Light", "light", "Entrance", "green", "Off", { on: false });
+    this.dev("thermostat", "Thermostat", "thermostat", "Hallway", "green", "21°C · Heat");
+    this.dev("garage", "Garage Door", "garage", "Garage", "green", "Closed", { locked: true });
+    this.dev("motion-hall", "Hall Motion", "motion", "Hallway", "green", "Clear");
+    this.dev("motion-yard", "Yard Motion", "motion", "Yard", "green", "Clear");
+    this.dev("smoke-kitchen", "Kitchen Smoke", "smoke", "Kitchen", "green", "Clear");
+    this.dev("camera-front", "Front Camera", "camera", "Entrance", "green", "Armed · Recording", { on: true });
+    this.dev("camera-yard", "Yard Camera", "camera", "Yard", "green", "Armed · Recording", { on: true });
+    this.toast("All devices normal — GREEN", "green");
+  }
+
   private clearTimers(): void {
     for (const id of this.beatTimers) window.clearTimeout(id);
     this.beatTimers = [];
@@ -78,52 +152,62 @@ export class Simulation {
   private beats(): Beat[] {
     return [
       { at: 0, run: () => {
-        this.toast("Simulation started — live demo feed", "info");
+        this.toast("Simulation started — IoT demo feed", "info");
         this.cmd("/health");
         this.target = 10;
+        this.seedDevices();
       } },
       { at: 3000, run: () => {
-        this.emit("lan", { mac: "00:11:22:33:44:55", ip: "192.168.100.10", vendor: "TP-Link", known: true });
+        this.dev("purifier", "Air Purifier", "purifier", "Living Room", "green", "On · Auto", { on: true });
+        this.dev("curtain", "Bedroom Curtain", "curtain", "Bedroom", "green", "Closed", { on: false });
       } },
-      { at: 5000, run: () => this.cmd("/device 192.168.100.10") },
+      { at: 5000, run: () => this.cmd("/latency") },
       { at: 7000, run: () => {
-        this.emit("lan", { mac: "AA:BB:CC:DD:EE:FF", ip: "192.168.100.50", vendor: "Espressif", known: false });
-        this.alert("info", "New LAN device observed", "detect/lan", "Unfamiliar MAC AA:BB:CC:DD:EE:FF · 192.168.100.50 joined the production switch");
+        this.dev("plug-coffee", "Coffee Plug", "plug", "Kitchen", "green", "On", { on: true });
+        this.alert("info", "Morning routine", "iot/auto", "Coffee plug ON · purifier auto · curtain closed");
       } },
-      { at: 9000, run: () => { this.target = 22; } },
+      { at: 9000, run: () => { this.target = 18; } },
       { at: 11000, run: () => {
-        this.emit("event", { topic: "voidmain/detect/suricata", node: "pi3a", kind: "suricata", sev: "yellow", summary: "ET SCAN Nmap script scan detected", src_ip: "192.168.100.50", dest_ip: "192.168.100.1", sig_id: 2010935 });
+        this.dev("motion-yard", "Yard Motion", "motion", "Yard", "yellow", "Motion detected");
+        this.toast("Yard motion sensor triggered", "yellow");
       } },
-      { at: 13000, run: () => this.cmd("/latency") },
-      { at: 15000, run: () => { this.target = 38; } },
+      { at: 13000, run: () => {
+        this.dev("thermostat", "Thermostat", "thermostat", "Hallway", "yellow", "23°C · Rising");
+        this.target = 32;
+      } },
+      { at: 15000, run: () => {
+        this.dev("leak-utility", "Utility Leak", "leak", "Utility", "yellow", "Moisture detected");
+        this.alert("yellow", "Water leak under sink", "iot/leak-utility", "Moisture sensor triggered — utility room. Check plumbing.");
+      } },
       { at: 17000, run: () => {
-        this.emit("event", { topic: "voidmain/detect/wifi", node: "pi3a", kind: "wifi", sev: "yellow", summary: "Rogue AP 'FREE_WIFI_5G' beaconing on channel 6" });
+        this.dev("motion-hall", "Hall Motion", "motion", "Hallway", "yellow", "Motion after hours");
+        this.dev("camera-yard", "Yard Camera", "camera", "Yard", "yellow", "Motion clip saved", { on: true });
       } },
-      { at: 19000, run: () => {
-        this.emit("tripwire", { node: "pi3a", edge: "open" });
-        this.alert("yellow", "Case tripwire opened", "tripwire/pi3a", "GPIO16 reed switch opened — detection node enclosure");
-      } },
-      { at: 23000, run: () => this.cmd("/filter type:suricata") },
+      { at: 21000, run: () => this.iotScenario() },
+      { at: 23000, run: () => this.cmd("/filter type:device") },
       { at: 25000, run: () => {
-        this.target = 64;
-        this.emit("event", { topic: "voidmain/detect/suricata", node: "pi3a", kind: "suricata", sev: "red", summary: "ET TROJAN Possible Cobalt Strike C2 check-in", src_ip: "192.168.100.50", dest_ip: "185.220.101.9", sig_id: 2035007 });
-        this.emit("event", { topic: "voidmain/detect/suricata", node: "pi3a", kind: "suricata", sev: "red", summary: "ET INFO Windows Executable Download From Non-Standard Port", src_ip: "192.168.100.50", dest_ip: "185.220.101.9" });
+        this.target = 58;
+        this.dev("door-back", "Back Door", "lock", "Kitchen", "red", "Opened unexpectedly", { locked: false });
+        this.dev("camera-yard", "Yard Camera", "camera", "Yard", "red", "Person detected", { on: true });
       } },
       { at: 27000, run: () => {
-        this.alert("red", "Suricata IDS hit — ET MALWARE beaconing", "alert/pi3b", "Beaconing pattern from 192.168.100.50 to 185.220.101.9 — email dispatched to operator");
+        this.alert("red", "Intrusion alert — door + camera", "iot/door-front", "Front door opened + camera person detection. Alert dispatched to owner.");
+        this.iotAlertPhase();
       } },
       { at: 29000, run: () => this.toast("Band RED — posture degraded", "red") },
-      { at: 31000, run: () => this.cmd("/focus pi3a") },
+      { at: 31000, run: () => this.cmd("/focus pi4") },
       { at: 33000, run: () => {
-        this.emit("tripwire", { node: "pi3b", edge: "open" });
-        this.alert("yellow", "Case tripwire opened — Pi3b", "tripwire/pi3b", "GPIO17 reed switch opened — alert node enclosure");
+        this.dev("smoke-kitchen", "Kitchen Smoke", "smoke", "Kitchen", "red", "Smoke rising");
+        this.alert("red", "Kitchen smoke rising", "iot/smoke-kitchen", "Smoke density climbing — HVAC boosted, alerts paged.");
       } },
       { at: 35000, run: () => { this.target = 88; } },
       { at: 37000, run: () => {
-        this.emit("event", { topic: "voidmain/detect/suricata", node: "pi3a", kind: "suricata", sev: "purple", summary: "ET MALWARE Metasploit Payload Execution", src_ip: "192.168.100.50", dest_ip: "185.220.101.9" });
-        this.alert("purple", "C2 beaconing detected", "alert/pi3b", "Sustained C2 session — PURPLE escalation envelope, operator paged");
+        this.alert("purple", "Automation armed", "iot/auto", "Multi-sensor fusion: motion + door + camera → secure-home playbook.");
       } },
-      { at: 39000, run: () => this.toast("PURPLE — escalation envelope", "purple") },
+      { at: 39000, run: () => {
+        this.toast("PURPLE — escalation envelope", "purple");
+        this.iotAutomationPhase();
+      } },
       { at: 41000, run: () => {
         const open = store.getState().alerts.find((a) => !a.ack);
         if (open) transport.sendAck(open.id);
@@ -131,12 +215,13 @@ export class Simulation {
       { at: 43000, run: () => this.toast("MQTT DEGRADED", "yellow") },
       { at: 47000, run: () => {
         this.silence = true;
-        this.alert("yellow", "Node pi3a heartbeat lost", "health/pi4", "No heartbeat from detection node for 15s — tile will age");
+        this.alert("yellow", "Node pi3a heartbeat lost", "health/pi4", "No heartbeat from sensor node for 15s — tile will age");
       } },
       { at: 51000, run: () => this.cmd("/health") },
       { at: 53000, run: () => { this.target = 55; } },
       { at: 55000, run: () => this.toast("MQTT LIVE", "info") },
       { at: 57000, run: () => this.cmd("/clear-filter") },
+      { at: 60000, run: () => this.iotRecoverPhase() },
       { at: 63000, run: () => this.cmd("/history 6h") },
       { at: 65000, run: () => this.cmd("/latency") },
       { at: 70000, run: () => {

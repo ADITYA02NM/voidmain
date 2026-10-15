@@ -13,6 +13,7 @@ def test_subscribe_allowlist_is_frozen():
     assert SUB_TOPICS == (
         "voidmain/health/#", "voidmain/alert/#", "voidmain/risk/score", "voidmain/risk/band",
         "voidmain/lan/#", "voidmain/tripwire/#", "voidmain/suricata/#", "voidmain/wifi/#",
+        "voidmain/device/#",
     )
 
 
@@ -47,10 +48,19 @@ def test_unlisted_topic_is_dropped():
 def test_all_mapped_types_are_valid():
     for topic in ("voidmain/risk/score", "voidmain/risk/band", "voidmain/alert/1",
                   "voidmain/health/pi4", "voidmain/lan/x", "voidmain/tripwire/pi3a",
-                  "voidmain/suricata/0", "voidmain/wifi/0"):
+                  "voidmain/suricata/0", "voidmain/wifi/0", "voidmain/device/door-1"):
         m = map_message(topic, _p({"v": 1, "b": "RED", "mac": "A", "severity": "red"}))
         if m is not None:
             assert m["t"] in VALID_T
+
+
+def test_device_topic_maps_to_device_envelope():
+    m = map_message("voidmain/device/door-1",
+                    _p({"name": "Front Door", "kind": "lock", "room": "Entrance",
+                        "sev": "red", "state": "Tamper detected", "locked": True}))
+    assert m["t"] == "device"
+    assert m["d"]["id"] == "door-1"
+    assert m["d"]["sev"] == "red"
 
 
 def test_envelope_stamps_ts():

@@ -14,10 +14,15 @@ const KIND_PATHS: Record<string, JSX.Element> = {
   tripwire: <><path d="M2.5 8.5h11v5h-11z" /><path d="M3 6 12.5 2.5" /><path d="M8 10.5v1" /></>,
   // ascending steps
   band: <><path d="M2.5 13.5v-3M6 13.5V8M9.5 13.5V5.5M13 13.5v-11" /></>,
+  // IoT device (chip)
+  device: <><rect x="3" y="3" width="10" height="10" rx="1.5" /><path d="M6 1.75v1.5M10 1.75v1.5M6 12.75v1.5M10 12.75v1.5M1.75 6h1.5M1.75 10h1.5M12.75 6h1.5M12.75 10h1.5" /></>,
+  // automation gear
+  automation: <><circle cx="8" cy="8" r="2.25" /><path d="M8 1.75v2M8 12.25v2M1.75 8h2M12.25 8h2M3.5 3.5l1.4 1.4M11.1 11.1l1.4 1.4M12.5 3.5l-1.4 1.4M4.9 11.1l-1.4 1.4" /></>,
 };
 
 const KIND_NAME: Record<string, string> = {
-  alert: "Alert", suricata: "IDS (Suricata)", wifi: "Wi-Fi", lan: "LAN", tripwire: "Tripwire", band: "Band change",
+  alert: "Alert", suricata: "IDS", wifi: "Wi-Fi", lan: "LAN", tripwire: "Tripwire", band: "Band change",
+  device: "IoT Device", automation: "Automation",
 };
 
 export const KindIcon = memo(function KindIcon({ kind }: { kind: string }) {

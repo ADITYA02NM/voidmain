@@ -7,7 +7,24 @@ export type Severity = "green" | "info" | "yellow" | "warn" | "red" | "critical"
 
 export type EnvelopeType =
   | "alert" | "score" | "band" | "health" | "lan" | "tripwire"
-  | "history" | "toast" | "event";
+  | "history" | "toast" | "event" | "device";
+
+export type DeviceKind =
+  | "lock" | "light" | "thermostat" | "garage" | "plug"
+  | "motion" | "smoke" | "leak" | "camera" | "purifier" | "curtain";
+
+export interface DeviceD {
+  id: string;
+  name: string;
+  kind: DeviceKind;
+  room: string;
+  on?: boolean;
+  locked?: boolean;
+  sev: string;
+  state: string;
+  automation?: string;
+  ts?: number;
+}
 
 export interface ScoreD { v: number; }
 export interface BandD { b: Band; }
@@ -38,7 +55,8 @@ export type PayloadFor<T extends EnvelopeType> =
   T extends "tripwire" ? TripwireD :
   T extends "history" ? HistoryD :
   T extends "toast" ? ToastD :
-  T extends "event" ? EventD : never;
+  T extends "event" ? EventD :
+  T extends "device" ? DeviceD : never;
 
 export interface Envelope<T extends EnvelopeType = EnvelopeType> {
   t: T;
@@ -55,7 +73,7 @@ export type ServerControl = Pong;
 
 // Runtime guards used by the contract-check panel in debug.html and the store.
 const T_SET = new Set<EnvelopeType>([
-  "alert", "score", "band", "health", "lan", "tripwire", "history", "toast", "event",
+  "alert", "score", "band", "health", "lan", "tripwire", "history", "toast", "event", "device",
 ]);
 
 export function isEnvelope(x: unknown): x is Envelope {

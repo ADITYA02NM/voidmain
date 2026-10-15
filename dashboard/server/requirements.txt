@@ -2,9 +2,7 @@
 aiohttp==3.10.10
 aiomqtt==2.3.0
 aiosqlite==0.20.0
-google-auth==2.40.1
-qrcode==8.2
-requests==2.32.4
+webauthn==3.0.1
 
 # dev / test only (not required at runtime on the Pi):
 #   pytest==8.3.3

@@ -75,10 +75,10 @@ function CommandConsoleImpl() {
   }, []);
 
   const layerRows = [
-    { k: "IDS", lit: layers.idsCount > 0, v: layers.idsCount },
-    { k: "LAN", lit: layers.lanToday > 0, v: layers.lanToday },
-    { k: "WiFi", lit: layers.wifiLast > 0, v: layers.wifiRogue ? "rogue" : "clear" },
-    { k: "Trip", lit: layers.tripLast > 0, v: layers.tripSeq },
+    { k: "Sense", lit: layers.idsCount > 0, v: layers.idsCount },
+    { k: "Dev", lit: layers.lanToday > 0, v: layers.lanToday },
+    { k: "Anom", lit: layers.wifiLast > 0, v: layers.wifiRogue ? "flag" : "clear" },
+    { k: "Auto", lit: layers.tripLast > 0, v: layers.tripSeq },
   ];
 
   return (

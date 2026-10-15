@@ -1,7 +1,7 @@
 """MQTT <-> WebSocket bridge: allowlist, envelope normalisation, fan-out.
 
 Contract (dashboard.md §5): envelope {t, ts, d}, t in
-alert|score|band|health|lan|tripwire|history|toast|event. ts is stamped at
+alert|score|band|health|lan|tripwire|history|toast|event|device. ts is stamped at
 MQTT-receive time. suricata/wifi are surfaced as t:"event" with structured
 fields (topic, node, kind, sev, summary + whitelisted src_ip/dest_ip/mac/sig_id).
 Alerts come only from voidmain/alert/# (owned by Pi3b).
@@ -35,9 +35,10 @@ SUB_TOPICS: tuple[str, ...] = (
     "voidmain/tripwire/#",
     "voidmain/suricata/#",
     "voidmain/wifi/#",
+    "voidmain/device/#",
 )
 
-VALID_T = {"alert", "score", "band", "health", "lan", "tripwire", "history", "toast", "event"}
+VALID_T = {"alert", "score", "band", "health", "lan", "tripwire", "history", "toast", "event", "device"}
 
 
 def _loads(payload: bytes) -> Any:
@@ -113,6 +114,13 @@ def map_message(topic: str, payload: bytes) -> dict[str, Any] | None:
             if k in d:
                 ev[k] = d[k]
         return {"t": "event", "d": ev}
+
+    if topic.startswith("voidmain/device/"):
+        d = data if isinstance(data, dict) else {}
+        d.setdefault("id", _leaf(topic))
+        d.setdefault("sev", "green")
+        d.setdefault("state", "—")
+        return {"t": "device", "d": d}
 
     return None
 

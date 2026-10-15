@@ -4,19 +4,18 @@
 DEV-ONLY. Never started by systemd. Publishes to the REAL broker so the whole
 path (mosquitto -> server.py -> WebSocket -> browser) is exercised end to end.
 
-Replays the README 4-minute demo:
-    1. quiet GREEN
-    2. unknown LAN device joins
-    3. tripwire pi3a opens
-    4. Suricata burst drives score RED then PURPLE
+Replays the IoT smart-home demo:
+    1. quiet GREEN — all devices seeded normal
+    2. unusual activity (YELLOW): motion, thermostat, leak
+    3. intrusion alert (RED): door open + smoke + camera person
+    4. automation (PURPLE): locks, lights, cameras, garage
     5. decay back to GREEN
 Plus failure beats: a node goes silent (stops publishing health), then the
 operator is told to kill Mosquitto to watch the header go STALE/OFFLINE.
 
-Note: this mock plays the role of BOTH the detection nodes AND the Pi4 risk
-engine (it publishes voidmain/risk/# too) purely so a laptop with no Pis can see
-the full dashboard. On real hardware, Pi4's sentinel-risk owns risk/# and this
-tool is never run.
+Note: this mock plays the role of BOTH the IoT sensors AND the Pi4 risk
+engine (it publishes voidmain/risk/# too) purely so a laptop with no hardware
+can see the full dashboard. On real hardware this tool is never run.
 
 Usage:
     pip install paho-mqtt
@@ -39,7 +38,7 @@ except ImportError:
 BANNER = r"""
 ============================================================
   VoidMain MOCK FEED  -  DEV-ONLY  -  DO NOT RUN IN PRODUCTION
-  Publishes synthetic events to the live broker for demos.
+  Publishes synthetic IoT events to the live broker for demos.
 ============================================================
 """
 
@@ -85,66 +84,125 @@ class Feed:
                  {"id": aid, "sev": sev, "title": title, "src": src,
                   "body": body, "ts": int(time.time()), "ack": False})
 
+    def device(self, did: str, name: str, kind: str, room: str, sev: str, state: str, **kw) -> None:
+        payload = {"id": did, "name": name, "kind": kind, "room": room,
+                   "sev": sev, "state": state, "ts": int(time.time()), **kw}
+        self.pub(f"voidmain/device/{did}", payload)
+
+    def seed_devices(self) -> None:
+        print("  seeding IoT devices (all GREEN)")
+        self.device("door-front", "Front Door", "lock", "Entrance", "green", "Locked", locked=True)
+        self.device("door-back", "Back Door", "lock", "Kitchen", "green", "Locked", locked=True)
+        self.device("light-living", "Living Light", "light", "Living Room", "green", "On", on=True)
+        self.device("light-bedroom", "Bedroom Light", "light", "Bedroom", "green", "Off", on=False)
+        self.device("light-porch", "Porch Light", "light", "Entrance", "green", "Off", on=False)
+        self.device("thermostat", "Thermostat", "thermostat", "Hallway", "green", "21C heat")
+        self.device("garage", "Garage Door", "garage", "Garage", "green", "Closed", locked=True)
+        self.device("plug-coffee", "Coffee Plug", "plug", "Kitchen", "green", "On", on=True)
+        self.device("plug-desk", "Desk Plug", "plug", "Office", "green", "On", on=True)
+        self.device("motion-hall", "Hall Motion", "motion", "Hallway", "green", "Clear")
+        self.device("motion-yard", "Yard Motion", "motion", "Yard", "green", "Clear")
+        self.device("smoke-kitchen", "Kitchen Smoke", "smoke", "Kitchen", "green", "Clear")
+        self.device("leak-utility", "Utility Leak", "leak", "Utility", "green", "Dry")
+        self.device("camera-front", "Front Camera", "camera", "Entrance", "green", "Armed recording", on=True)
+        self.device("camera-yard", "Yard Camera", "camera", "Yard", "green", "Armed recording", on=True)
+        self.device("purifier", "Air Purifier", "purifier", "Living Room", "green", "On auto", on=True)
+        self.device("curtain", "Bedroom Curtain", "curtain", "Bedroom", "green", "Closed", on=False)
+
+    def iot_scenario(self) -> None:
+        print("  IoT YELLOW — unusual activity")
+        self.device("motion-hall", "Hall Motion", "motion", "Hallway", "yellow", "Motion after hours")
+        self.device("motion-yard", "Yard Motion", "motion", "Yard", "yellow", "Motion after hours")
+        self.device("thermostat", "Thermostat", "thermostat", "Hallway", "yellow", "24C rising")
+        self.device("leak-utility", "Utility Leak", "leak", "Utility", "yellow", "Moisture detected")
+        self.alert("iot-yellow-1", "yellow", "Unusual motion detected",
+                   "iot/motion-hall", "Hall + yard motion triggered at 02:14 — no one home.")
+        time.sleep(2)
+        print("  IoT RED — intrusion alert")
+        self.device("door-front", "Front Door", "lock", "Entrance", "red", "Opened unexpectedly", locked=False)
+        self.device("smoke-kitchen", "Kitchen Smoke", "smoke", "Kitchen", "red", "Smoke threshold exceeded")
+        self.device("camera-front", "Front Camera", "camera", "Entrance", "red", "Person detected", on=True)
+        self.device("camera-yard", "Yard Camera", "camera", "Yard", "red", "Person detected", on=True)
+        self.alert("iot-red-1", "red", "Intrusion alert — door + camera",
+                   "iot/door-front", "Front door opened + camera person detection. Alert sent to owner.")
+        time.sleep(2)
+        print("  IoT PURPLE — automation executed")
+        self.device("door-front", "Front Door", "lock", "Entrance", "purple", "Auto-locked",
+                    locked=True, automation="Locked door remotely")
+        self.device("door-back", "Back Door", "lock", "Kitchen", "purple", "Auto-locked",
+                    locked=True, automation="Locked back door")
+        self.device("light-living", "Living Light", "light", "Living Room", "purple", "All lights ON",
+                    on=True, automation="Turned on all lights")
+        self.device("light-bedroom", "Bedroom Light", "light", "Bedroom", "purple", "All lights ON",
+                    on=True, automation="Turned on all lights")
+        self.device("light-porch", "Porch Light", "light", "Entrance", "purple", "All lights ON",
+                    on=True, automation="Turned on porch light")
+        self.device("camera-front", "Front Camera", "camera", "Entrance", "purple", "High-res recording",
+                    on=True, automation="Switched to high-res recording")
+        self.device("camera-yard", "Yard Camera", "camera", "Yard", "purple", "High-res recording",
+                    on=True, automation="Switched to high-res recording")
+        self.device("garage", "Garage Door", "garage", "Garage", "purple", "Locked",
+                    locked=True, automation="Garage secured")
+        self.alert("iot-purple-1", "purple", "Automation executed — home secured",
+                   "iot/auto", "Doors locked, lights on, cameras high-res, garage closed.")
+        time.sleep(3)
+        print("  IoT GREEN — recovery")
+        self.device("door-front", "Front Door", "lock", "Entrance", "green", "Locked", locked=True)
+        self.device("door-back", "Back Door", "lock", "Kitchen", "green", "Locked", locked=True)
+        self.device("light-living", "Living Light", "light", "Living Room", "green", "On", on=True)
+        self.device("light-bedroom", "Bedroom Light", "light", "Bedroom", "green", "Off", on=False)
+        self.device("light-porch", "Porch Light", "light", "Entrance", "green", "Off", on=False)
+        self.device("thermostat", "Thermostat", "thermostat", "Hallway", "green", "21C heat")
+        self.device("garage", "Garage Door", "garage", "Garage", "green", "Closed", locked=True)
+        self.device("motion-hall", "Hall Motion", "motion", "Hallway", "green", "Clear")
+        self.device("motion-yard", "Yard Motion", "motion", "Yard", "green", "Clear")
+        self.device("smoke-kitchen", "Kitchen Smoke", "smoke", "Kitchen", "green", "Clear")
+        self.device("camera-front", "Front Camera", "camera", "Entrance", "green", "Armed recording", on=True)
+        self.device("camera-yard", "Yard Camera", "camera", "Yard", "green", "Armed recording", on=True)
+
     def stop(self) -> None:
         self.client.loop_stop()
         self.client.disconnect()
 
 
 def run(feed: Feed) -> None:
-    print("\n[1] quiet GREEN")
+    print("\n[1] quiet GREEN — seed all IoT devices")
+    feed.seed_devices()
     for i in range(3):
         feed.health()
         feed.risk(4 + i)
         time.sleep(2)
 
-    print("\n[2] unknown LAN device joins")
-    feed.pub("voidmain/lan/aabbccddeeff",
-             {"mac": "AA:BB:CC:DD:EE:FF", "ip": "192.168.100.57",
-              "vendor": "Espressif", "known": False})
-    feed.risk(14)
+    print("\n[2] IoT scenario: yellow -> red -> purple -> green")
+    feed.iot_scenario()
+    feed.risk(70)
     feed.health()
-    time.sleep(3)
+    time.sleep(2)
 
-    print("\n[3] tripwire pi3a opens")
-    feed.pub("voidmain/tripwire/pi3a", {"node": "pi3a", "edge": "open"})
-    feed.alert("trip-pi3a-1", "yellow", "Case tripwire opened",
-               "tripwire/pi3a", "Reed switch edge on Pi3a case lid.")
-    feed.risk(38)
-    feed.health()
-    time.sleep(3)
-
-    print("\n[4] Suricata burst -> RED -> PURPLE")
-    for i, sig in enumerate([
-        "ET SCAN suspicious inbound",
-        "ET MALWARE beaconing",
-        "ET EXPLOIT attempt",
-        "ET TROJAN C2 checkin",
-    ]):
-        feed.pub(f"voidmain/suricata/{i}",
-                 {"signature": sig, "severity": "red", "src": "suricata/eth0"})
-        feed.risk(60 + i * 9)
-        feed.health()
-        time.sleep(2)
-    feed.risk(92)  # PURPLE
-    feed.alert("crit-1", "purple", "Critical: sustained C2 activity",
+    print("\n[3] residual PURPLE then decay")
+    feed.risk(88)
+    feed.alert("crit-1", "purple", "Critical: sustained intrusion",
                "risk/engine", "Score crossed PURPLE (85). Operator paged.")
-    time.sleep(3)
+    time.sleep(2)
+    feed.risk(40)
+    feed.health()
+    time.sleep(2)
 
-    print("\n[5] decay back to GREEN (-2 / 10s modelled fast)")
-    s = 92
+    print("\n[4] decay back to GREEN (-8 / 1.5s modelled fast)")
+    s = 40
     while s > 4:
         s = max(0, s - 8)
         feed.risk(s)
         feed.health()
         time.sleep(1.5)
 
-    print("\n[6] failure beat: Pi3a goes silent (no more health)")
+    print("\n[5] failure beat: Pi3a goes silent (no more health)")
     for _ in range(4):
         feed.health(nodes=("pi4", "pi3b"))  # pi3a omitted -> tile ages to red
         feed.risk(4)
         time.sleep(3)
 
-    print("\n[7] Now KILL mosquitto to watch the header go STALE/OFFLINE:")
+    print("\n[6] Now KILL mosquitto to watch the header go STALE/OFFLINE:")
     print("      sudo systemctl stop mosquitto   (Ctrl-C here when done)")
     while True:
         feed.health(nodes=("pi4", "pi3b"))
@@ -159,7 +217,7 @@ def main() -> None:
     ap.add_argument("--user", default=None)
     ap.add_argument("--pass", dest="password", default=None)
     ap.add_argument("--script", default="demo", choices=["demo"],
-                    help="scenario to replay (README §7 4-minute demo)")
+                    help="scenario to replay (IoT smart-home demo)")
     args = ap.parse_args()
 
     print(BANNER)

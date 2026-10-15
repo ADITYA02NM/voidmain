@@ -1,51 +1,50 @@
-"""VoidMain Google authentication routes (core console).
+"""VoidMain WebAuthn authentication routes (Pi4 — GOVERNANCE).
 
-Owner signs in with a Google account, usually from their phone.
-Primary flow is QR device-pairing: the dashboard shows a QR + short
-code; the phone opens /auth/approve, completes Google sign-in
-(biometrics/passcode via Google), and the desktop polls /auth/poll to
-pick up the resulting session cookie. A direct POST /auth/google is
-also available for same-device sign-in. No passwords or passkeys are
-stored.
+Single-owner passkey authentication. No passwords, no biometrics stored.
+py_webauthn handles all cryptographic verification.
 
 Route table (all under /auth/):
-  POST /auth/google             verify Google ID token, start session
-  POST /auth/qr                 issue pairing code + URL (phone flow)
-  GET  /auth/qr.svg             QR image for a pairing URL
-  GET  /auth/approve            phone page: Continue with Google
-  POST /auth/approve/complete   phone posts verified Google id_token
-  POST /auth/poll               desktop polls code → session cookie
+  POST /auth/setup              token-gated first-credential registration
+  POST /auth/register/begin     start registration ceremony
+  POST /auth/register/complete  finish registration
+  POST /auth/login/begin        start authentication ceremony
+  POST /auth/login/complete     finish authentication
+  POST /auth/reauth/begin       re-authentication (session refresh)
+  POST /auth/reauth/complete    finish re-auth
   POST /auth/logout             end session
-  GET  /auth/status             session state
+  GET  /auth/credentials        list credentials (authenticated)
+  DELETE /auth/credentials/{id} revoke a credential (authenticated)
 """
 
 from __future__ import annotations
 
 import hashlib
-import html as html_mod
+import json
 import logging
-import os
 import secrets
-import socket
 import time
 from collections import defaultdict
-from io import BytesIO
+from typing import Any
 
 from aiohttp import web
-from google.auth.transport import requests as google_requests
-from google.oauth2 import id_token as google_id_token
-from qrcode import QRCode
-from qrcode.image.svg import SvgPathImage
 
-from . import csp as csp_mod
+import webauthn
+from webauthn.helpers import bytes_to_base64url, base64url_to_bytes
+from webauthn.helpers.structs import (
+    AuthenticatorSelectionCriteria,
+    PublicKeyCredentialDescriptor,
+    ResidentKeyRequirement,
+    UserVerificationRequirement,
+)
+
 from .auth_db import AuthDB
 
 LOG = logging.getLogger("voidmain.auth")
 
+CEREMONY_COOKIE = "voidmain_ceremony"
 SESSION_COOKIE = "voidmain_session"
+CEREMONY_TTL = 180  # 3 minutes
 SESSION_TTL = 3600  # 1 hour
-
-GOOGLE_ISSUERS = ("https://accounts.google.com", "accounts.google.com")
 
 # ── Rate limiting ─────────────────────────────────────────────────────────── #
 
@@ -83,16 +82,38 @@ def _get_auth_db(request: web.Request) -> AuthDB:
     return request.app["auth_db"]
 
 
-def _get_google_client_id(request: web.Request) -> str:
-    return request.app.get("google_client_id", "")
+def _get_rp_id(request: web.Request) -> str:
+    return request.app["auth_rp_id"]
 
 
-def _get_owner_emails(request: web.Request) -> list[str]:
-    return request.app.get("owner_emails") or []
+def _get_rp_name(request: web.Request) -> str:
+    return request.app["auth_rp_name"]
+
+
+def _get_origins(request: web.Request) -> list[str]:
+    return request.app["auth_origins"]
 
 
 def _secure_cookies(request: web.Request) -> bool:
     return request.app.get("auth_secure_cookies", False)
+
+
+def _set_ceremony_cookie(
+    resp: web.Response, ceremony_id: str,
+    *, secure: bool = False,
+) -> None:
+    resp.set_cookie(
+        CEREMONY_COOKIE, ceremony_id,
+        max_age=CEREMONY_TTL, httponly=True,
+        samesite="Strict", secure=secure, path="/auth/",
+    )
+
+
+def _get_ceremony_id(request: web.Request) -> str:
+    cid = request.cookies.get(CEREMONY_COOKIE)
+    if not cid:
+        raise web.HTTPBadRequest(text="Missing ceremony cookie")
+    return cid
 
 
 def _set_session_cookie(
@@ -121,331 +142,277 @@ def _require_session(request: web.Request) -> str:
     return sid
 
 
-# ── Google ID token verification ──────────────────────────────────────────── #
+# ── Setup (token-gated first credential) ─────────────────────────────────── #
 
-def _verify_google_token(id_token: str, client_id: str) -> dict:
-    """Fetch/verify a Google OIDC ID token against Google's public keys.
-
-    Returns the raw payload; claim checks (issuer, email_verified) live in
-    the handler so tests can monkeypatch this network boundary only.
-    """
-    return google_id_token.verify_oauth2_token(
-        id_token, google_requests.Request(), audience=client_id,
-    )
-
-
-# ── Google sign-in ────────────────────────────────────────────────────────── #
-
-async def handle_google(request: web.Request) -> web.Response:
+async def handle_setup(request: web.Request) -> web.Response:
     auth_db = _get_auth_db(request)
     _rate_guard(request, auth_db)
 
-    info, email = await _verify_body_token(request, auth_db)
+    body = await request.json()
+    token = body.get("token", "")
+    if auth_db.has_owner():
+        # Owner already exists — setup stays token-gated.
+        if not auth_db.consume_enrollment_token(token):
+            auth_db.audit("setup_bad_token", ip=request.remote)
+            raise web.HTTPForbidden(text="Invalid or expired enrollment token")
+        auth_db.audit("setup_token_consumed", ip=request.remote)
+    else:
+        # First-run open enrollment: no owner yet, skip the CLI token.
+        auth_db.audit("setup_open_enrollment", ip=request.remote)
 
-    sid = auth_db.create_session(info["sub"], ip=request.remote or "unknown",
-                                 ttl=SESSION_TTL)
-    auth_db.audit("google_login", ip=request.remote, credential_id=info["sub"], detail=email)
-    LOG.info("google login: %s", email)
+    rp_id = _get_rp_id(request)
+    rp_name = _get_rp_name(request)
 
-    resp = web.json_response({
-        "status": "ok",
-        "email": email,
-        "name": info.get("name", ""),
-        "picture": info.get("picture", ""),
-    })
+    options = webauthn.generate_registration_options(
+        rp_id=rp_id,
+        rp_name=rp_name,
+        user_id=b"voidmain-owner",
+        user_name="owner",
+        user_display_name="VoidMain Owner",
+        authenticator_selection=AuthenticatorSelectionCriteria(
+            resident_key=ResidentKeyRequirement.PREFERRED,
+            user_verification=UserVerificationRequirement.REQUIRED,
+        ),
+    )
+
+    ceremony_id = secrets.token_urlsafe(32)
+    auth_db.store_challenge(
+        ceremony_id, bytes_to_base64url(options.challenge),
+        "registration", CEREMONY_TTL,
+    )
+
+    resp = web.Response(
+        text=webauthn.options_to_json(options),
+        content_type="application/json",
+    )
+    _set_ceremony_cookie(resp, ceremony_id, secure=_secure_cookies(request))
+    return resp
+
+
+async def handle_setup_complete(request: web.Request) -> web.Response:
+    auth_db = _get_auth_db(request)
+    _rate_guard(request, auth_db)
+    ceremony_id = _get_ceremony_id(request)
+
+    challenge_b64 = auth_db.consume_challenge(ceremony_id)
+    if not challenge_b64:
+        auth_db.audit("setup_challenge_invalid", ip=request.remote)
+        raise web.HTTPBadRequest(text="Invalid or expired challenge")
+
+    body = await request.json()
+
+    try:
+        verification = webauthn.verify_registration_response(
+            credential=body,
+            expected_challenge=base64url_to_bytes(challenge_b64),
+            expected_origin=_get_origins(request),
+            expected_rp_id=_get_rp_id(request),
+            require_user_verification=True,
+        )
+    except Exception as e:
+        auth_db.audit("setup_verify_failed", ip=request.remote, detail=str(e))
+        raise web.HTTPBadRequest(text=f"Verification failed: {e}") from e
+
+    cred_id = bytes_to_base64url(verification.credential_id)
+    auth_db.save_credential(
+        cred_id=cred_id,
+        public_key=verification.credential_public_key,
+        sign_count=verification.sign_count,
+        transports=json.dumps([t.value for t in (verification.credential_backed_up and [] or [])]) if hasattr(verification, 'credential_backed_up') else None,
+        device_type=verification.credential_device_type if hasattr(verification, 'credential_device_type') else None,
+        backed_up=getattr(verification, 'credential_backed_up', False),
+        aaguid=str(getattr(verification, 'aaguid', '')),
+    )
+    auth_db.audit("credential_registered", ip=request.remote, credential_id=cred_id)
+
+    sid = auth_db.create_session(cred_id, ip=request.remote, ttl=SESSION_TTL)
+    resp = web.json_response({"status": "ok", "credential_id": cred_id})
     _set_session_cookie(resp, sid, secure=_secure_cookies(request))
     return resp
 
 
-# ── QR device-pairing (phone Google sign-in → desktop session) ────────────── #
+# ── Registration (add credential — authenticated) ────────────────────────── #
 
-CODE_TTL = 300          # 5 minutes to scan + approve
-CODE_LEN = 8
-CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # no 0/O/1/I/L
-_PENDING_MAX = 32
+async def handle_register_begin(request: web.Request) -> web.Response:
+    _require_session(request)
+    auth_db = _get_auth_db(request)
+    _rate_guard(request, auth_db)
 
-# code -> {created, expires, status: "pending"|"approved", sid, email}
-_pending: dict[str, dict] = {}
+    existing = auth_db.list_credentials()
+    exclude = [
+        PublicKeyCredentialDescriptor(id=base64url_to_bytes(c.id))
+        for c in existing if not c.revoked
+    ]
+
+    options = webauthn.generate_registration_options(
+        rp_id=_get_rp_id(request),
+        rp_name=_get_rp_name(request),
+        user_id=b"voidmain-owner",
+        user_name="owner",
+        user_display_name="VoidMain Owner",
+        authenticator_selection=AuthenticatorSelectionCriteria(
+            resident_key=ResidentKeyRequirement.PREFERRED,
+            user_verification=UserVerificationRequirement.REQUIRED,
+        ),
+        exclude_credentials=exclude,
+    )
+
+    ceremony_id = secrets.token_urlsafe(32)
+    auth_db.store_challenge(
+        ceremony_id, bytes_to_base64url(options.challenge),
+        "registration", CEREMONY_TTL,
+    )
+
+    resp = web.Response(
+        text=webauthn.options_to_json(options),
+        content_type="application/json",
+    )
+    _set_ceremony_cookie(resp, ceremony_id, secure=_secure_cookies(request))
+    return resp
 
 
-def reset_pending() -> None:
-    """Clear pairing codes (tests)."""
-    _pending.clear()
+async def handle_register_complete(request: web.Request) -> web.Response:
+    _require_session(request)
+    auth_db = _get_auth_db(request)
+    _rate_guard(request, auth_db)
+    ceremony_id = _get_ceremony_id(request)
 
+    challenge_b64 = auth_db.consume_challenge(ceremony_id)
+    if not challenge_b64:
+        auth_db.audit("register_challenge_invalid", ip=request.remote)
+        raise web.HTTPBadRequest(text="Invalid or expired challenge")
 
-def _cleanup_pending() -> None:
-    now = time.time()
-    for code in [c for c, rec in _pending.items() if now > rec["expires"]]:
-        del _pending[code]
+    body = await request.json()
 
-
-def _new_pending_code() -> str:
-    _cleanup_pending()
-    while len(_pending) >= _PENDING_MAX:
-        oldest = min(_pending, key=lambda c: _pending[c]["created"])
-        del _pending[oldest]
-    while True:
-        code = "".join(secrets.choice(CODE_ALPHABET) for _ in range(CODE_LEN))
-        if code not in _pending:
-            return code
-
-
-def _lan_ip() -> str:
-    """Best-effort primary LAN IPv4 (UDP connect sends no packets)."""
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        return ip or "127.0.0.1"
-    except OSError:
-        return "127.0.0.1"
-    finally:
-        s.close()
-
-
-def _public_base(request: web.Request) -> str:
-    """Base URL the phone can reach — never localhost (that's the desktop)."""
-    host = os.environ.get("VOIDMAIN_PUBLIC_HOST", "").strip()
-    if not host:
-        detected = _lan_ip()
-        host = "127.0.0.1" if detected.startswith("127.") else detected
-    if ":" in host and not host.startswith("["):
-        # host:port given — keep as-is
-        return f"http://{host}"
-    cfg = request.app.get("cfg")
-    port = getattr(cfg, "http_port", None) or int(os.environ.get("VOIDMAIN_HTTP_PORT", "8081"))
-    return f"http://{host}:{port}"
-
-
-def _get_pending(request: web.Request, code: str) -> dict:
-    code = (code or "").strip().upper()
-    rec = _pending.get(code)
-    if rec is None or time.time() > rec["expires"]:
-        if code in _pending:
-            del _pending[code]
-        raise web.HTTPGone(text="This sign-in code expired. Generate a new one on the dashboard.")
-    return rec
-
-
-async def _verify_body_token(request: web.Request, auth_db: AuthDB) -> tuple[dict, str]:
-    """Shared Google-token verification for /auth/google and approve/complete.
-
-    Returns (info, email_lower). Raises 400/401/403/503 as appropriate.
-    """
-    client_id = _get_google_client_id(request)
-    if not client_id:
-        raise web.HTTPServiceUnavailable(
-            text="Google sign-in not configured (GOOGLE_CLIENT_ID missing)"
+        verification = webauthn.verify_registration_response(
+            credential=body,
+            expected_challenge=base64url_to_bytes(challenge_b64),
+            expected_origin=_get_origins(request),
+            expected_rp_id=_get_rp_id(request),
+            require_user_verification=True,
         )
-    try:
-        body = await request.json()
     except Exception as e:
-        raise web.HTTPBadRequest(text="JSON body required") from e
-    token = body.get("id_token") or body.get("credential") or ""
-    if not token or not isinstance(token, str):
-        raise web.HTTPBadRequest(text="id_token required")
+        auth_db.audit("register_verify_failed", ip=request.remote, detail=str(e))
+        raise web.HTTPBadRequest(text=f"Verification failed: {e}") from e
 
+    cred_id = bytes_to_base64url(verification.credential_id)
+    auth_db.save_credential(
+        cred_id=cred_id,
+        public_key=verification.credential_public_key,
+        sign_count=verification.sign_count,
+        device_type=verification.credential_device_type if hasattr(verification, 'credential_device_type') else None,
+        backed_up=getattr(verification, 'credential_backed_up', False),
+        aaguid=str(getattr(verification, 'aaguid', '')),
+    )
+    auth_db.audit("credential_registered", ip=request.remote, credential_id=cred_id)
+    return web.json_response({"status": "ok", "credential_id": cred_id})
+
+
+# ── Login ─────────────────────────────────────────────────────────────────── #
+
+async def handle_login_begin(request: web.Request) -> web.Response:
+    auth_db = _get_auth_db(request)
+    _rate_guard(request, auth_db)
+
+    creds = auth_db.list_credentials()
+    allow = [
+        PublicKeyCredentialDescriptor(id=base64url_to_bytes(c.id))
+        for c in creds if not c.revoked
+    ]
+
+    if not allow:
+        raise web.HTTPForbidden(text="No credentials registered")
+
+    options = webauthn.generate_authentication_options(
+        rp_id=_get_rp_id(request),
+        allow_credentials=allow,
+        user_verification=UserVerificationRequirement.REQUIRED,
+    )
+
+    ceremony_id = secrets.token_urlsafe(32)
+    auth_db.store_challenge(
+        ceremony_id, bytes_to_base64url(options.challenge),
+        "authentication", CEREMONY_TTL,
+    )
+
+    resp = web.Response(
+        text=webauthn.options_to_json(options),
+        content_type="application/json",
+    )
+    _set_ceremony_cookie(resp, ceremony_id, secure=_secure_cookies(request))
+    return resp
+
+
+async def handle_login_complete(request: web.Request) -> web.Response:
+    auth_db = _get_auth_db(request)
+    _rate_guard(request, auth_db)
+    ceremony_id = _get_ceremony_id(request)
     ip = request.remote or "unknown"
+
+    body = await request.json()
+
+    # Step 1: Parse credential ID
+    raw_id = body.get("rawId") or body.get("id", "")
+
+    # Step 2: Look up among non-revoked credentials — reject unknown FIRST
+    cred = auth_db.get_credential(raw_id)
+    if not cred:
+        auth_db.audit("unknown_credential", ip=ip, credential_id=raw_id)
+        raise web.HTTPUnauthorized(text="Unknown credential")
+    if cred.revoked:
+        auth_db.audit("revoked_credential_used", ip=ip, credential_id=raw_id)
+        raise web.HTTPUnauthorized(text="Credential revoked")
+
+    # Step 3: Consume the challenge (single-use, bound to ceremony)
+    challenge_b64 = auth_db.consume_challenge(ceremony_id)
+    if not challenge_b64:
+        auth_db.audit("login_challenge_invalid", ip=ip, credential_id=raw_id)
+        raise web.HTTPBadRequest(text="Invalid or expired challenge")
+
+    # Step 4: py_webauthn verify
     try:
-        info = _verify_google_token(token, client_id)
-        if info.get("iss") not in GOOGLE_ISSUERS:
-            raise ValueError(f"unexpected issuer: {info.get('iss')!r}")
-        if not info.get("email_verified"):
-            raise ValueError("email not verified")
-        if not info.get("sub") or not info.get("email"):
-            raise ValueError("missing sub or email claim")
+        verification = webauthn.verify_authentication_response(
+            credential=body,
+            expected_challenge=base64url_to_bytes(challenge_b64),
+            expected_origin=_get_origins(request),
+            expected_rp_id=_get_rp_id(request),
+            credential_public_key=cred.public_key,
+            credential_current_sign_count=cred.sign_count,
+            require_user_verification=True,
+        )
     except Exception as e:
-        auth_db.audit("google_auth_failed", ip=ip, detail=str(e)[:200])
-        LOG.warning("google auth failed: %s", e)
-        raise web.HTTPUnauthorized(text="Google authentication failed") from e
+        auth_db.audit("login_verify_failed", ip=ip,
+                      credential_id=raw_id, detail=str(e))
+        raise web.HTTPUnauthorized(text=f"Verification failed: {e}") from e
 
-    email = str(info["email"]).lower()
-    allowed = {e.lower() for e in _get_owner_emails(request)}
-    if allowed and email not in allowed:
-        auth_db.audit("google_email_denied", ip=ip, detail=email)
-        raise web.HTTPForbidden(text="This Google account is not authorised")
-    return info, email
+    # Step 5: Counter rule
+    new_count = verification.new_sign_count
+    if cred.sign_count > 0 and new_count > 0 and new_count <= cred.sign_count:
+        auth_db.audit("counter_regression", ip=ip, credential_id=raw_id,
+                      detail=f"expected>{cred.sign_count}, got={new_count}")
+        raise web.HTTPUnauthorized(text="Authenticator counter regression")
+    auth_db.update_sign_count(raw_id, new_count)
 
+    # Step 6: Create session
+    sid = auth_db.create_session(raw_id, ip=ip, ttl=SESSION_TTL)
+    auth_db.audit("login_success", ip=ip, credential_id=raw_id)
 
-async def handle_qr(request: web.Request) -> web.Response:
-    """Issue a short pairing code + phone-reachable approve URL."""
-    auth_db = _get_auth_db(request)
-    _rate_guard(request, auth_db)
-    code = _new_pending_code()
-    now = time.time()
-    _pending[code] = {
-        "created": now, "expires": now + CODE_TTL,
-        "status": "pending", "sid": None, "email": "",
-    }
-    url = f"{_public_base(request)}/auth/approve?code={code}"
-    auth_db.audit("qr_issued", ip=request.remote, detail=code)
-    return web.json_response({"code": code, "url": url, "expires_in": CODE_TTL})
-
-
-async def handle_qr_svg(request: web.Request) -> web.Response:
-    """Serve an SVG QR image for a pairing URL (phone scans this)."""
-    u = request.query.get("u", "")
-    if not u.startswith(("http://", "https://")) or len(u) > 300:
-        raise web.HTTPBadRequest(text="u must be an http(s) URL")
-    qr = QRCode(image_factory=SvgPathImage)
-    qr.add_data(u)
-    qr.make(fit=True)
-    buf = BytesIO()
-    qr.make_image().save(buf)
-    return web.Response(
-        body=buf.getvalue(), content_type="image/svg+xml",
-        headers={"Cache-Control": "no-store"},
-    )
-
-
-def _approve_html(code: str, client_id: str, *, approved_email: str = "") -> str:
-    code_esc = html_mod.escape(code)
-    if approved_email:
-        return (
-            "<!doctype html><html><head><meta charset=\"utf-8\">"
-            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-            "<title>VoidMain — signed in</title></head><body style=\""
-            "font-family:system-ui,sans-serif;background:#0A0A0F;color:#e8e8f0;"
-            "display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0\">"
-            "<div style=\"text-align:center;padding:2rem\">"
-            "<h1 style=\"font-size:1.5rem;margin:0 0 .5rem\">Void<b style=\"color:#8A2BE2\">Main</b></h1>"
-            f"<p style=\"color:#14E0C8;margin:0 0 .25rem\">Signed in</p>"
-            f"<p style=\"color:#8b8ba0;font-size:.9rem\">{html_mod.escape(approved_email)}</p>"
-            "<p style=\"color:#8b8ba0;font-size:.9rem\">Return to the dashboard — it unlocks automatically.</p>"
-            "</div></body></html>"
-        )
-    cid_esc = html_mod.escape(client_id)
-    if client_id:
-        btnbox = (
-            "<div id=\"btnbox\">"
-            "<div id=\"g_id_onload\" data-client_id=\"" + cid_esc + "\" "
-            "data-callback=\"vmApprove\" data-auto_prompt=\"false\"></div>"
-            "<div class=\"g_id_signin\" data-type=\"standard\" data-size=\"large\"></div>"
-            "</div>"
-        )
-        gsi = "<script src=\"https://accounts.google.com/gsi/client\" async defer></script>"
-    else:
-        # Dev mode (no GOOGLE_CLIENT_ID): one-tap approve so the demo flow works.
-        btnbox = (
-            "<div id=\"btnbox\">"
-            "<button id=\"devbtn\" style=\"font-size:1.05rem;font-weight:600;padding:.85rem 2rem;"
-            "border:0;border-radius:10px;background:#8A2BE2;color:#fff;cursor:pointer\">"
-            "Approve sign-in</button>"
-            "</div>"
-        )
-        gsi = ""
-    return (
-        "<!doctype html><html><head><meta charset=\"utf-8\">"
-        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-        "<title>VoidMain — approve sign-in</title></head><body style=\""
-        "font-family:system-ui,sans-serif;background:#0A0A0F;color:#e8e8f0;margin:0\">"
-        "<div style=\"max-width:24rem;margin:0 auto;padding:3rem 1.25rem;text-align:center\">"
-        "<h1 style=\"font-size:1.5rem;margin:0 0 .5rem\">Void<b style=\"color:#8A2BE2\">Main</b></h1>"
-        "<p style=\"color:#8b8ba0;margin:0 0 .25rem\">Approve this dashboard sign-in</p>"
-        f"<p style=\"font-family:ui-monospace,monospace;font-size:1.6rem;letter-spacing:.35em;"
-        f"color:#14E0C8;margin:.5rem 0 1.5rem\">{code_esc}</p>"
-        + btnbox +
-        "<p id=\"msg\" style=\"color:#8b8ba0;font-size:.9rem;margin-top:1.25rem;min-height:1.2em\"></p>"
-        "</div>"
-        + gsi +
-        "<script>"
-        "async function vmApprove(resp) {"
-        "  var msg = document.getElementById('msg');"
-        "  msg.textContent = 'Verifying…';"
-        "  try {"
-        "    var body = {code: " + repr(code_esc) + "};"
-        "    if (resp && resp.credential) body.id_token = resp.credential;"
-        "    var r = await fetch('/auth/approve/complete', {"
-        "      method: 'POST', headers: {'Content-Type': 'application/json'},"
-        "      credentials: 'same-origin',"
-        "      body: JSON.stringify(body)"
-        "    });"
-        "    if (!r.ok) { msg.textContent = 'Failed: ' + (await r.text()); return; }"
-        "    document.getElementById('btnbox').style.display = 'none';"
-        "    msg.textContent = 'Signed in. Return to the VoidMain dashboard.';"
-        "  } catch (e) { msg.textContent = 'Network error — try again.'; }"
-        "}"
-        "var db = document.getElementById('devbtn');"
-        "if (db) db.onclick = function() { vmApprove(null); };"
-        "</script></body></html>"
-    )
-
-
-async def handle_approve(request: web.Request) -> web.Response:
-    """Phone-facing page: Continue with Google (biometrics via Google)."""
-    code = (request.query.get("code") or "").strip().upper()
-    client_id = _get_google_client_id(request)
-    rec = _pending.get(code)
-    approved_email = ""
-    if rec is not None:
-        if time.time() > rec["expires"]:
-            del _pending[code]
-            rec = None
-        elif rec["status"] == "approved":
-            approved_email = rec["email"]
-    if rec is None and not approved_email:
-        raise web.HTTPGone(
-            text="This sign-in code expired. Generate a new one on the dashboard."
-        )
-    html = _approve_html(code, client_id, approved_email=approved_email)
-    resp = web.Response(text=html, content_type="text/html")
-    resp.headers["Cache-Control"] = "no-store"
-    csp_mod.apply(resp, csp_mod.build_csp_for_html(html))
-    return resp
-
-
-async def handle_approve_complete(request: web.Request) -> web.Response:
-    """Phone posts the Google id_token; the pairing code is marked approved."""
-    auth_db = _get_auth_db(request)
-    _rate_guard(request, auth_db)
-    try:
-        body = await request.json()
-    except Exception as e:
-        raise web.HTTPBadRequest(text="JSON body required") from e
-    code = str(body.get("code", "")).strip().upper()
-    rec = _get_pending(request, code)
-
-    client_id = _get_google_client_id(request)
-    if client_id:
-        # Real Google auth — verify the id_token from the phone.
-        info, email = await _verify_body_token(request, auth_db)
-        sub = info["sub"]
-    else:
-        # Dev mode — no Google client ID configured; approve unconditionally.
-        sub = "dev-owner"
-        email = "dev@voidmain.local"
-
-    sid = auth_db.create_session(sub, ip=request.remote or "unknown",
-                                 ttl=SESSION_TTL)
-    rec.update(status="approved", sid=sid, email=email)
-    auth_db.audit("google_login", ip=request.remote, credential_id=sub,
-                  detail=f"qr:{email}")
-    LOG.info("qr approve: %s", email)
-    return web.json_response({"status": "ok", "email": email})
-
-
-async def handle_poll(request: web.Request) -> web.Response:
-    """Desktop polls the pairing code; on approval receives the session."""
-    auth_db = _get_auth_db(request)
-    try:
-        body = await request.json()
-    except Exception as e:
-        raise web.HTTPBadRequest(text="JSON body required") from e
-    code = str(body.get("code", "")).strip().upper()
-    rec = _get_pending(request, code)
-
-    if rec["status"] != "approved":
-        return web.json_response({"status": "pending"})
-
-    sid = rec["sid"]
-    email = rec["email"]
-    del _pending[code]  # one-time handoff
-    auth_db.audit("qr_login", ip=request.remote, detail=email)
-    resp = web.json_response({
-        "status": "ok", "authenticated": True, "email": email,
-    })
+    resp = web.json_response({"status": "ok"})
     _set_session_cookie(resp, sid, secure=_secure_cookies(request))
     return resp
+
+
+# ── Re-auth ───────────────────────────────────────────────────────────────── #
+
+async def handle_reauth_begin(request: web.Request) -> web.Response:
+    # Same as login_begin (uses same credentials)
+    return await handle_login_begin(request)
+
+
+async def handle_reauth_complete(request: web.Request) -> web.Response:
+    # Same verification as login_complete
+    return await handle_login_complete(request)
 
 
 # ── Logout ────────────────────────────────────────────────────────────────── #
@@ -466,17 +433,55 @@ async def handle_logout(request: web.Request) -> web.Response:
     return resp
 
 
+# ── Credential management ─────────────────────────────────────────────────── #
+
+async def handle_list_credentials(request: web.Request) -> web.Response:
+    _require_session(request)
+    auth_db = _get_auth_db(request)
+    creds = auth_db.list_credentials()
+    return web.json_response([
+        {
+            "id": c.id,
+            "created_at": c.created_at,
+            "last_used_at": c.last_used_at,
+            "revoked": c.revoked,
+            "device_type": c.device_type,
+            "backed_up": c.backed_up,
+            "sign_count": c.sign_count,
+        }
+        for c in creds
+    ])
+
+
+async def handle_revoke_credential(request: web.Request) -> web.Response:
+    _require_session(request)
+    auth_db = _get_auth_db(request)
+    cred_id = request.match_info["id"]
+
+    if auth_db.count_non_revoked() <= 1:
+        cred = auth_db.get_credential_non_revoked(cred_id)
+        if cred:
+            raise web.HTTPConflict(text="Cannot revoke last credential")
+
+    if not auth_db.revoke_credential(cred_id):
+        raise web.HTTPNotFound(text="Credential not found or already revoked")
+
+    auth_db.audit("credential_revoked", ip=request.remote, credential_id=cred_id)
+    return web.json_response({"status": "ok"})
+
+
 # ── Auth status ───────────────────────────────────────────────────────────── #
 
 async def handle_auth_status(request: web.Request) -> web.Response:
     auth_db = _get_auth_db(request)
+    has_owner = auth_db.has_owner()
     sid = request.cookies.get(SESSION_COOKIE)
     authenticated = False
     if sid:
         session = auth_db.validate_session(sid)
         authenticated = session is not None
     return web.json_response({
-        "has_owner": bool(_get_google_client_id(request)),
+        "has_owner": has_owner,
         "authenticated": authenticated,
     })
 
@@ -485,12 +490,16 @@ async def handle_auth_status(request: web.Request) -> web.Response:
 
 def add_auth_routes(app: web.Application) -> None:
     app.add_routes([
-        web.post("/auth/google", handle_google),
-        web.post("/auth/qr", handle_qr),
-        web.get("/auth/qr.svg", handle_qr_svg),
-        web.get("/auth/approve", handle_approve),
-        web.post("/auth/approve/complete", handle_approve_complete),
-        web.post("/auth/poll", handle_poll),
+        web.post("/auth/setup", handle_setup),
+        web.post("/auth/setup/complete", handle_setup_complete),
+        web.post("/auth/register/begin", handle_register_begin),
+        web.post("/auth/register/complete", handle_register_complete),
+        web.post("/auth/login/begin", handle_login_begin),
+        web.post("/auth/login/complete", handle_login_complete),
+        web.post("/auth/reauth/begin", handle_reauth_begin),
+        web.post("/auth/reauth/complete", handle_reauth_complete),
         web.post("/auth/logout", handle_logout),
+        web.get("/auth/credentials", handle_list_credentials),
+        web.delete("/auth/credentials/{id}", handle_revoke_credential),
         web.get("/auth/status", handle_auth_status),
     ])

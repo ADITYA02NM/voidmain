@@ -75,7 +75,7 @@ class Config:
     rp_name: str = os.environ.get("VOIDMAIN_RP_NAME", "VoidMain")
     origins: list[str] = field(default_factory=lambda: [
         o.strip() for o in os.environ.get(
-            "VOIDMAIN_ORIGINS", "http://localhost:8080"
+            "VOIDMAIN_ORIGINS", "http://localhost:5173,http://localhost:8080"
         ).split(",") if o.strip()
     ])
     session_ttl: int = int(os.environ.get("VOIDMAIN_SESSION_TTL", "3600"))

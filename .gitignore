@@ -8,6 +8,7 @@ venv/
 
 # secrets / local state — never commit
 auth.db
+evidence.db
 auth.db-*
 ca/
 ca.key
@@ -18,3 +19,6 @@ certs/server.key
 .DS_Store
 *.egg-info/
 .pytest_cache/
+
+# platformio
+.pio/

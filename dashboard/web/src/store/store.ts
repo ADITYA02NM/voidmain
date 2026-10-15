@@ -1,5 +1,5 @@
 import { useCallback, useRef, useSyncExternalStore } from "react";
-import type { AlertD, Band, EventD, Envelope, LanD } from "../contracts/ws";
+import type { AlertD, Band, DeviceD, EventD, Envelope, LanD } from "../contracts/ws";
 import { isWorse } from "../lib/bands";
 import { ClockSync, LatencyWindow } from "../lib/latency";
 
@@ -15,7 +15,7 @@ export interface Pipeline { detect: number; govern: number; alert: number; }
 export interface UEvent {
   id: string;
   ts: number;
-  kind: "alert" | "suricata" | "wifi" | "lan" | "tripwire" | "band";
+  kind: "alert" | "suricata" | "wifi" | "lan" | "tripwire" | "band" | "device" | "automation";
   node: string;
   sev: string;
   summary: string;
@@ -35,6 +35,19 @@ export interface LanDevice {
   known?: boolean;
   firstSeen?: number;
   lastSeen?: number;
+}
+
+export interface IoTDevice {
+  id: string;
+  name: string;
+  kind: string;
+  room: string;
+  on?: boolean;
+  locked?: boolean;
+  sev: string;
+  state: string;
+  automation?: string;
+  lastSeen: number;
 }
 
 export interface CommandEntry {
@@ -72,6 +85,7 @@ export interface State {
   lastToast: { msg: string; sev: string; at: number } | null;
   events: UEvent[];
   devices: Record<string, LanDevice>;
+  iot: Record<string, IoTDevice>;
   commandHistory: CommandEntry[];
   muteUntil: number;
   focusNode: string | null;
@@ -95,7 +109,7 @@ function initial(): State {
     nodes: {}, layers: { idsCount: 0, idsLast: 0, lanToday: 0, wifiRogue: false, wifiLast: 0, tripLast: 0, tripSeq: 0 },
     pipeline: { detect: 0, govern: 0, alert: 0 },
     latencyLast: 0, latencyP95: 0, clockReady: false, clockUncertaintyMs: Infinity, lastToast: null,
-    events: [], devices: {}, commandHistory: [], muteUntil: 0, focusNode: null, eventFilter: "all", showDevices: false,
+    events: [], devices: {}, iot: {}, commandHistory: [], muteUntil: 0, focusNode: null, eventFilter: "all", showDevices: false,
     simRunning: false, selectedDevice: null, historyRange: "24h",
   };
 }
@@ -221,6 +235,7 @@ export class Store {
     s.layers = { ...s.layers };
     s.pipeline = { ...s.pipeline };
     s.devices = { ...s.devices };
+    s.iot = { ...s.iot };
     let alertsChanged = false;
     let eventsChanged = false;
     let alerts = s.alerts;
@@ -340,6 +355,32 @@ export class Store {
           if (d.msg === "MQTT DEGRADED") s.degraded = true;
           else if (d.msg === "MQTT LIVE") s.degraded = false;
           s.lastToast = { msg: d.msg, sev: d.sev, at: Date.now() };
+          break;
+        }
+        case "device": {
+          const d = env.d as DeviceD;
+          if (!d.id) break;
+          const prev = s.iot[d.id];
+          s.iot[d.id] = {
+            id: d.id, name: d.name || d.id, kind: d.kind || "sensor", room: d.room || "—",
+            on: d.on ?? prev?.on, locked: d.locked ?? prev?.locked,
+            sev: d.sev || "green", state: d.state || "—",
+            automation: d.automation, lastSeen: env.ts,
+          };
+          s.eventCount += 1;
+          if (d.sev === "purple" && d.automation) {
+            if (!eventsChanged) { events = events.slice(); eventsChanged = true; }
+            this.pushEvent({
+              id: nextEvId(), ts: env.ts, kind: "automation", node: d.id,
+              sev: "purple", summary: `Automation: ${d.automation}`, derived: true,
+            }, events);
+          } else if (prev && d.sev !== prev.sev) {
+            if (!eventsChanged) { events = events.slice(); eventsChanged = true; }
+            this.pushEvent({
+              id: nextEvId(), ts: env.ts, kind: "device", node: d.id,
+              sev: d.sev, summary: `${d.name || d.id}: ${d.state}`, derived: true,
+            }, events);
+          }
           break;
         }
       }

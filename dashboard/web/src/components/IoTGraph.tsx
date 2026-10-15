@@ -1,163 +1,140 @@
-import { memo, useCallback, useMemo } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { store, useStore } from "../store/store";
-import type { LanDevice, UEvent } from "../store/store";
-import { useNow, useReducedMotion } from "../hooks/useNow";
-import { utcTime } from "../lib/format";
+import type { IoTDevice, UEvent } from "../store/store";
+import { useReducedMotion } from "../hooks/useNow";
 
-const CX = 300, CY = 180, RADIUS = 130;
+const KIND_ICON: Record<string, string> = {
+  lock: "🔒", light: "💡", thermostat: "🌡", garage: "🚪", plug: "🔌",
+  motion: "🚶", smoke: "🔥", leak: "💧", camera: "📷", purifier: "💨", curtain: "🪟",
+};
+const SEV_COLOR: Record<string, string> = {
+  green: "var(--green)", yellow: "var(--yellow)", red: "var(--red)", purple: "var(--purple)",
+};
+const SEV_LABEL: Record<string, string> = {
+  green: "Normal", yellow: "Detected", red: "Alert", purple: "Action",
+};
 
-function shortMac(mac: string): string {
-  const parts = mac.split(":");
-  return parts.length >= 4 ? `${parts[0]}:${parts[1]}:…:${parts[parts.length - 1]}` : mac;
-}
-
-function deviceAngle(index: number, total: number): number {
-  if (total <= 0) return 0;
-  return (index / total) * Math.PI * 2 - Math.PI / 2;
-}
-
-interface DevPos { x: number; y: number; dev: LanDevice; }
-
-function layoutDevices(devices: LanDevice[]): DevPos[] {
-  const sorted = [...devices].sort((a, b) => {
-    if (a.known !== b.known) return a.known ? -1 : 1;
-    return (a.vendor || "zzz").localeCompare(b.vendor || "zzz");
-  });
-  return sorted.map((dev, i) => {
-    const angle = deviceAngle(i, sorted.length);
-    return {
-      x: CX + RADIUS * Math.cos(angle),
-      y: CY + RADIUS * Math.sin(angle),
-      dev,
-    };
-  });
-}
-
-function isRecentJoin(dev: LanDevice, nowSec: number): boolean {
-  return !!dev.lastSeen && (nowSec - dev.lastSeen) < 600;
-}
-
-function deviceMatchesEvent(dev: LanDevice, ev: UEvent): boolean {
-  if (ev.src_ip && dev.ip === ev.src_ip) return true;
-  if (ev.dest_ip && dev.ip === ev.dest_ip) return true;
-  if (ev.mac && dev.mac.toLowerCase() === ev.mac.toLowerCase()) return true;
-  return false;
+function matches(dev: IoTDevice, ev: UEvent): boolean {
+  if (ev.node && ev.node === dev.id) return true;
+  const s = (ev.summary || "").toLowerCase();
+  return s.includes(dev.name.toLowerCase()) || s.includes(dev.id.toLowerCase());
 }
 
 function IoTGraphImpl() {
-  const devicesMap = useStore((s) => s.devices);
+  const iotMap = useStore((s) => s.iot);
   const events = useStore((s) => s.events);
+  const selectedId = useStore((s) => s.selectedDevice);
   const reduce = useReducedMotion();
-  const now = useNow(2000);
-  const nowSec = Math.floor(now / 1000);
-  const selectedMac = useStore((s) => s.selectedDevice);
+  const [filter, setFilter] = useState<"all" | "alert" | "sensor" | "actuator">("all");
 
-  const devices = useMemo(() => Object.values(devicesMap), [devicesMap]);
-  const positions = useMemo(() => layoutDevices(devices), [devices]);
+  const devices = useMemo(() => Object.values(iotMap).sort((a, b) => a.name.localeCompare(b.name)), [iotMap]);
 
-  const recentEvents = useMemo(() => events.slice(0, 50), [events]);
-
-  const litMacs = useMemo(() => {
+  const recent = useMemo(() => events.slice(0, 50), [events]);
+  const litIds = useMemo(() => {
     const set = new Set<string>();
-    for (const ev of recentEvents) {
+    for (const ev of recent) {
       for (const d of devices) {
-        if (deviceMatchesEvent(d, ev)) set.add(d.mac);
+        if (matches(d, ev)) set.add(d.id);
       }
     }
     return set;
-  }, [recentEvents, devices]);
+  }, [recent, devices]);
 
-  const selectedDev = selectedMac ? devicesMap[selectedMac] : null;
+  const SENSOR_KINDS = new Set(["motion", "smoke", "leak", "camera"]);
+  const filtered = useMemo(() => {
+    if (filter === "alert") return devices.filter((d) => d.sev !== "green");
+    if (filter === "sensor") return devices.filter((d) => SENSOR_KINDS.has(d.kind));
+    if (filter === "actuator") return devices.filter((d) => !SENSOR_KINDS.has(d.kind));
+    return devices;
+  }, [devices, filter]);
+
+  const selectedDev = selectedId ? iotMap[selectedId] : null;
   const selectedEvents = useMemo(() => {
     if (!selectedDev) return [];
-    return recentEvents.filter((ev) => deviceMatchesEvent(selectedDev, ev)).slice(0, 10);
-  }, [selectedDev, recentEvents]);
+    return recent.filter((ev) => matches(selectedDev, ev)).slice(0, 8);
+  }, [selectedDev, recent]);
 
-  const onClickDevice = useCallback((mac: string) => {
-    store.setSelectedDevice(store.getState().selectedDevice === mac ? null : mac);
+  const onClick = useCallback((id: string) => {
+    store.setSelectedDevice(store.getState().selectedDevice === id ? null : id);
   }, []);
 
+  const counts = useMemo(() => ({
+    all: devices.length,
+    alert: devices.filter((d) => d.sev !== "green").length,
+    sensor: devices.filter((d) => SENSOR_KINDS.has(d.kind)).length,
+    actuator: devices.filter((d) => !SENSOR_KINDS.has(d.kind)).length,
+  }), [devices]);
+
   if (!devices.length) {
-    return <div className="iot-empty empty">Awaiting ARP — no external devices observed</div>;
+    return <div className="iot-empty empty">No IoT devices yet — start SIM TOUR to seed the home</div>;
   }
 
   return (
     <div className="iot-wrap">
-      <svg className="iot-svg" viewBox="0 0 600 360" role="img" aria-label="IoT device topology">
-        {/* Router hub */}
-        <rect x={CX - 40} y={CY - 16} width={80} height={32} rx={4}
-          fill="var(--panel-2)" stroke="var(--muted)" strokeWidth={1.5} />
-        <text x={CX} y={CY + 4} textAnchor="middle"
-          className="iot-label" style={{ fontSize: 9 }}>ROUTER</text>
-
-        {/* Pi3a observer */}
-        <rect x={CX - 36} y={CY + 30} width={72} height={22} rx={3}
-          fill="var(--panel-2)" stroke="var(--accent-line)" strokeWidth={1} strokeDasharray="3 2" />
-        <text x={CX} y={CY + 44} textAnchor="middle"
-          className="iot-label" style={{ fontSize: 8, fill: "var(--accent)" }}>Pi3a OBSERVER</text>
-
-        {/* Edges to router */}
-        {positions.map((p) => (
-          <line key={`edge-${p.dev.mac}`}
-            x1={CX} y1={CY} x2={p.x} y2={p.y}
-            stroke={litMacs.has(p.dev.mac) ? "var(--accent)" : "var(--border)"}
-            strokeWidth={litMacs.has(p.dev.mac) ? 1.5 : 0.8}
-            opacity={litMacs.has(p.dev.mac) ? 0.8 : 0.3} />
+      {/* filter tabs */}
+      <div className="iot-tabs" role="tablist" aria-label="Device filters">
+        {(["all", "alert", "sensor", "actuator"] as const).map((f) => (
+          <button
+            key={f}
+            role="tab"
+            aria-selected={filter === f}
+            className={`iot-tab${filter === f ? " iot-tab--active" : ""}`}
+            onClick={() => setFilter(f)}
+          >
+            {f === "all" ? "All" : f === "alert" ? "Active" : f === "sensor" ? "Sensors" : "Actuators"}
+            <span className="iot-tab-n">{counts[f]}</span>
+          </button>
         ))}
+      </div>
 
-        {/* Device nodes */}
-        {positions.map((p) => {
-          const isNew = isRecentJoin(p.dev, nowSec);
-          const isUnknown = p.dev.known === false;
-          const isLit = litMacs.has(p.dev.mac);
-          const isSelected = selectedMac === p.dev.mac;
+      {/* device grid */}
+      <div className="iot-grid">
+        {filtered.map((dev) => {
+          const sevColor = SEV_COLOR[dev.sev] || "var(--border)";
+          const lit = litIds.has(dev.id);
+          const sel = selectedId === dev.id;
+          const icon = KIND_ICON[dev.kind] || "📡";
           return (
-            <g key={p.dev.mac} className="iot-node" onClick={() => onClickDevice(p.dev.mac)}
-              tabIndex={0} role="button" aria-pressed={isSelected}
-              aria-label={`${p.dev.vendor || "Unknown vendor"} ${p.dev.ip || ""}${isUnknown ? ", unknown device" : ""}`}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClickDevice(p.dev.mac); } }}>
-              <rect x={p.x - 38} y={p.y - 20} width={76} height={40} rx={4}
-                fill={isSelected ? "var(--accent-weak)" : "var(--panel-2)"}
-                stroke={isUnknown ? "var(--yellow)" : isLit ? "var(--accent)" : "var(--border)"}
-                strokeWidth={isSelected ? 2 : isUnknown ? 1.5 : 1}
-                strokeDasharray={isUnknown ? "4 2" : "none"} />
-              {isUnknown && (
-                <path className="iot-unknown-mark" d={`M${p.x - 32} ${p.y - 20}l6 6-6 6-6-6z`}>
-                  <title>Unknown device</title>
-                </path>
-              )}
-              {isNew && !reduce && (
-                <circle className="iot-new-dot" cx={p.x + 32} cy={p.y - 14} r={4} fill="var(--accent)" />
-              )}
-              <text x={p.x} y={p.y - 6} textAnchor="middle" className="iot-label"
-                style={{ fontSize: 8 }}>{p.dev.vendor || "unknown"}</text>
-              <text x={p.x} y={p.y + 4} textAnchor="middle" className="iot-label"
-                style={{ fontSize: 7, fill: "var(--muted)" }}>{p.dev.ip || "—"}</text>
-              <text x={p.x} y={p.y + 13} textAnchor="middle" className="iot-label"
-                style={{ fontSize: 7, fill: "var(--muted-2)" }}>{shortMac(p.dev.mac)}</text>
-            </g>
+            <button
+              key={dev.id}
+              className={`iot-tile${sel ? " iot-tile--sel" : ""}${lit && !reduce ? " iot-tile--lit" : ""}`}
+              style={{ borderColor: sevColor }}
+              onClick={() => onClick(dev.id)}
+              aria-pressed={sel}
+              aria-label={`${dev.name} in ${dev.room}, ${SEV_LABEL[dev.sev] || dev.sev}`}
+            >
+              <div className="iot-tile-top">
+                <span className="iot-tile-icon">{icon}</span>
+                <span className="iot-tile-dot" style={{ background: sevColor, boxShadow: `0 0 var(--node-glow-sm) ${sevColor}` }} />
+              </div>
+              <div className="iot-tile-name">{dev.name}</div>
+              <div className="iot-tile-room">{dev.room}</div>
+              <div className="iot-tile-sev" style={{ color: sevColor }}>{SEV_LABEL[dev.sev] || dev.sev}</div>
+              {dev.automation && <div className="iot-tile-auto">⚡ {dev.automation}</div>}
+            </button>
           );
         })}
-      </svg>
+      </div>
 
-      {/* Side detail card */}
+      {/* detail drawer */}
       {selectedDev && (
         <div className="iot-detail">
           <div className="iot-detail-hd">
-            <span className="iot-detail-vendor">{selectedDev.vendor || "Unknown"}</span>
+            <span className="iot-detail-vendor">{KIND_ICON[selectedDev.kind] || "📡"} {selectedDev.name}</span>
             <button className="iot-detail-close" aria-label="Close device details" onClick={() => store.setSelectedDevice(null)}>×</button>
           </div>
-          <div className="iot-detail-row"><span className="k">IP</span><span>{selectedDev.ip || "—"}</span></div>
-          <div className="iot-detail-row"><span className="k">MAC</span><span className="num">{selectedDev.mac}</span></div>
-          <div className="iot-detail-row"><span className="k">Known</span><span>{selectedDev.known ? "yes" : "no"}</span></div>
-          <div className="iot-detail-row"><span className="k">First seen</span><span className="num">{selectedDev.firstSeen ? utcTime(selectedDev.firstSeen) : "—"}</span></div>
-          <div className="iot-detail-row"><span className="k">Last seen</span><span className="num">{selectedDev.lastSeen ? utcTime(selectedDev.lastSeen) : "—"}</span></div>
+          <div className="iot-detail-row"><span className="k">Kind</span><span>{selectedDev.kind}</span></div>
+          <div className="iot-detail-row"><span className="k">Room</span><span>{selectedDev.room}</span></div>
+          <div className="iot-detail-row"><span className="k">State</span><span style={{ color: SEV_COLOR[selectedDev.sev] }}>{selectedDev.state}</span></div>
+          <div className="iot-detail-row"><span className="k">Severity</span><span style={{ color: SEV_COLOR[selectedDev.sev] }}>{SEV_LABEL[selectedDev.sev] || selectedDev.sev}</span></div>
+          {selectedDev.automation && (
+            <div className="iot-detail-row"><span className="k">Automation</span><span style={{ color: "var(--purple)" }}>{selectedDev.automation}</span></div>
+          )}
           {selectedEvents.length > 0 && (
             <>
               <div className="label iot-detail-sub">Recent events</div>
               {selectedEvents.map((ev) => (
                 <div key={ev.id} className={`iot-detail-ev sev-${ev.sev}`}>
-                  <span className="num">{utcTime(ev.ts)}</span>
                   <span>{ev.summary}</span>
                 </div>
               ))}

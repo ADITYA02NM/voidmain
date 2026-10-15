@@ -18,9 +18,8 @@
 # voidmain
 
 > **Many sensors. One brain. Coordinated responses.**
-> **voidmain** is an adaptive, security-aware IoT coordination system — the IoT
-> evolution of the [ULTRON](https://github.com/ADITYA02NM/ULTRON) smart-house
-> security platform — built for **Farlands Innovation Mission 7: Connected
+> **voidmain** is an adaptive, security-aware IoT coordination system
+> built for **Farlands Innovation Mission 7: Connected
 > Infrastructure — Adaptive Intelligent IoT Systems**.
 
 Where traditional automation fires **one sensor → one action**, voidmain runs
@@ -187,9 +186,5 @@ today is the full **software loop on one laptop**.
 
 ## Credits
 
-- **Lineage:** [ADITYA02NM/ULTRON](https://github.com/ADITYA02NM/ULTRON) —
-  the zero-cloud IoT security ecosystem this project evolves from.
 - **Event:** Farlands · Innovation Mission 7 — *Connected Infrastructure:
   Adaptive Intelligent IoT Systems*.
-- Dashboard, risk engine, and evidence store are reused under the principle
-  **"don't rebuild what already works."**
