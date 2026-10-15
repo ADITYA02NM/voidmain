@@ -70,6 +70,7 @@ export class Simulation {
   }
 
   private seedDevices(): void {
+    this.dev("smoke-detector", "Smoke Detector", "smoke", "Kitchen", "green", "Clear");
     this.dev("campfire", "Campfire", "extinguish", "Backyard", "green", "Burning", { burning: true });
     this.dev("air-purifier", "Air Purifier", "purifier", "Living Room", "green", "On auto", { on: true });
     this.dev("door-front", "Front Door", "lock", "Entrance", "green", "Locked", { locked: true });
@@ -87,6 +88,7 @@ export class Simulation {
     this.dev("door-front", "Front Door", "lock", "Entrance", "red", "Opened unexpectedly", { locked: false });
     this.dev("camera-front", "Front Camera", "camera", "Entrance", "red", "Person detected", { on: true });
     this.dev("campfire", "Campfire", "extinguish", "Backyard", "red", "Smoldering");
+    this.dev("smoke-detector", "Smoke Detector", "smoke", "Kitchen", "red", "Smoke alarm");
     this.alert("red", "Intrusion alert — door + camera", "iot/door-front", "Front door opened + camera person detection. Alert dispatched to owner.");
     this.toast("RED — alerts sent to owner", "red");
     this.target = 70;
@@ -97,7 +99,8 @@ export class Simulation {
     this.dev("camera-front", "Front Camera", "camera", "Entrance", "purple", "High-res recording", { on: true, automation: "Camera switched to high-res" });
     this.dev("air-purifier", "Air Purifier", "purifier", "Living Room", "purple", "Boosted", { on: true, automation: "Air purifier boosted" });
     this.dev("campfire", "Campfire", "extinguish", "Backyard", "purple", "Extinguished", { burning: false, automation: "Campfire extinguished by automation" });
-    this.alert("purple", "Automation executed — home secured", "iot/auto", "Doors locked, cameras high-res, air purifier boosted, campfire extinguished.");
+    this.dev("smoke-detector", "Smoke Detector", "smoke", "Kitchen", "purple", "HVAC boost", { automation: "HVAC boosted for smoke clearance" });
+    this.alert("purple", "Automation executed — home secured", "iot/auto", "Doors locked, cameras high-res, air purifier boosted, campfire extinguished, HVAC boosted.");
     this.toast("PURPLE — automation actions taken", "purple");
   }
 
@@ -106,6 +109,7 @@ export class Simulation {
     this.dev("camera-front", "Front Camera", "camera", "Entrance", "green", "Armed recording", { on: true });
     this.dev("air-purifier", "Air Purifier", "purifier", "Living Room", "green", "On auto", { on: true });
     this.dev("campfire", "Campfire", "extinguish", "Backyard", "green", "Burning", { burning: true });
+    this.dev("smoke-detector", "Smoke Detector", "smoke", "Kitchen", "green", "Clear");
     this.dev("motion-yard", "Yard Motion", "motion", "Yard", "green", "Clear");
   }
 
@@ -182,6 +186,7 @@ export class Simulation {
         purifier: sev === "green" ? "On auto" : sev === "yellow" ? "Filter low" : sev === "red" ? "Off" : "Boosted",
         extinguish: sev === "green" ? "Burning" : sev === "yellow" ? "Waning" : sev === "red" ? "Smoldering" : "Extinguished",
         motion: sev === "green" ? "Clear" : sev === "yellow" ? "Motion after hours" : sev === "red" ? "Person detected" : "Cleared",
+        smoke: sev === "green" ? "Clear" : sev === "yellow" ? "Smoke sensed" : sev === "red" ? "Smoke alarm" : "HVAC boost",
       };
       const state = states[row?.kind as keyof typeof states] || "OK";
       const extra: Record<string, unknown> = {};

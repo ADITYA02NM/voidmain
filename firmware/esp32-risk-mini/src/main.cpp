@@ -50,6 +50,23 @@ static bool dirty = true;
 static const char* NODES[4] = {"pi4", "pi3a", "pi3b", "esp32"};
 static bool nodeUp[4] = {false, false, false, false};
 
+// ---- esp32 -> broker: retained health heartbeat ----
+// Keeps the dashboard's ESP32 node tile (and this panel's own box) in sync.
+// The will payload fires when the board drops, so the tile ages out honestly.
+static const char* HEALTH_TOPIC = "voidmain/health/esp32";
+static const char* HEALTH_WILL   = "{\"node\":\"esp32\",\"up\":0,\"services\":[]}";
+static uint32_t healthPubAt = 0;
+static const uint32_t HEALTH_EVERY = 5000;  // ms — dashboard marks a node stale >30s
+
+static void publishHealth() {
+  if (!mqtt.connected()) return;
+  char buf[96];
+  snprintf(buf, sizeof(buf), "{\"node\":\"esp32\",\"up\":%lu,\"services\":[\"ok\"]}",
+           (unsigned long)(millis() / 1000));
+  mqtt.publish(HEALTH_TOPIC, buf, true);  // retained: a restarted bridge sees it too
+  healthPubAt = millis();
+}
+
 static uint32_t wifiAttemptAt = 0;
 static bool wifiWasConnected = false;
 
@@ -111,7 +128,8 @@ static void render() {
   // system name
   display->setTextSize(1);
   display->setCursor(0, 0);
-  display->print("VoidMain ");
+  display->print("VoidMain");
+  display->print(" ");
   display->print(SIM_LABEL);
 
   // risk number — big
@@ -211,7 +229,7 @@ static void bootAnimation() {
     display->setTextColor(SSD1306_WHITE);
     if (h >= 64) {
       display->setTextSize(1);
-      display->setCursor(34, 4);
+      display->setCursor(28, 4);
       display->print("VoidMain");
     }
     drawEye(cxA, cy, R, openAmt, lookX);
@@ -227,6 +245,20 @@ static void bootAnimation() {
 // ---- WiFi (non-blocking) ----
 static void wifiStart() {
   WiFi.mode(WIFI_STA);
+  // one-time boot scan: print every visible network so serial shows
+  // whether the target AP is even detectable (diagnosis aid)
+  static bool scanned = false;
+  if (!scanned) {
+    scanned = true;
+    int n = WiFi.scanNetworks();
+    Serial.printf("[scan] %d networks visible\n", n);
+    for (int i = 0; i < n; i++) {
+      Serial.printf("  %s  ch=%d  rssi=%d  %s\n",
+                    WiFi.SSID(i).c_str(), WiFi.channel(i), WiFi.RSSI(i),
+                    WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "open" : "enc");
+    }
+    WiFi.scanDelete();
+  }
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   wifiAttemptAt = millis();
   Serial.printf("[wifi] connecting %s", WIFI_SSID);
@@ -265,12 +297,14 @@ static void onMqtt(char* topic, byte* payload, unsigned int len) {
 
   if (strstr(topic, "risk/score")) {
     score = doc["v"] | 0;
+    Serial.printf("[rx] score=%d\n", score);          // dashboard -> OLED trace
   } else if (strstr(topic, "risk/band")) {
     applyBand(doc["b"] | "GREEN");
+    Serial.printf("[rx] band=%s -> led mode %d\n", band, (int)ledMode);
   } else if (strstr(topic, "health/")) {
-    // voidmain/health/<node>  {"node":"pi4","up":true,...}
+    // voidmain/health/<node>  {"node":"pi4","up":3600,...}  (up: bool or seconds)
     const char* node = doc["node"] | "";
-    bool up = doc["up"] | false;
+    bool up = doc["up"].as<float>() != 0.0f;  // works for true/false and 0/N
     for (int i = 0; i < 4; i++) {
       if (strstr(topic, NODES[i]) || !strcmp(node, NODES[i])) {
         nodeUp[i] = up;
@@ -280,6 +314,7 @@ static void onMqtt(char* topic, byte* payload, unsigned int len) {
   } else if (strstr(topic, "alert/")) {
     // severity of newest open alert nudges mode
     const char* sev = doc["sev"] | "";
+    Serial.printf("[rx] alert sev=%s\n", sev);
     if (!strcmp(sev, "red") || !strcmp(sev, "critical")) ledMode = LED_ALERT;
     else if (!strcmp(sev, "yellow") || !strcmp(sev, "warn")) ledMode = LED_DETECT;
     else if (!strcmp(sev, "purple")) ledMode = LED_ACTION;
@@ -299,13 +334,19 @@ static void onMqtt(char* topic, byte* payload, unsigned int len) {
 static void mqttMaintain() {
   if (WiFi.status() != WL_CONNECTED) return;
   if (!mqtt.connected()) {
-    if (mqtt.connect(MQTT_CLIENT_ID)) {
+    // will = retained "esp32 down" so the dashboard tile drops when we vanish
+    if (mqtt.connect(MQTT_CLIENT_ID, HEALTH_TOPIC, 0, true, HEALTH_WILL)) {
       mqtt.subscribe("voidmain/risk/score");
       mqtt.subscribe("voidmain/risk/band");
       mqtt.subscribe("voidmain/health/#");
       mqtt.subscribe("voidmain/alert/#");
       mqtt.subscribe("voidmain/device/#");
+      mqtt.subscribe("voidmain/sim/score");
+      mqtt.subscribe("voidmain/sim/stop");
+      mqtt.subscribe("voidmain/sim/service_state");
+      mqtt.subscribe("voidmain/sim/global_state");
       Serial.println("[mqtt] connected");
+      publishHealth();  // retained heartbeat -> dashboard tile + own node box
       if (ledMode == LED_OFFLINE) ledMode = LED_NORMAL;
     } else {
       static uint32_t last;
@@ -341,6 +382,13 @@ void loop() {
     // wifi ok but broker not yet — keep current band colour; if never connected stay blue
   }
   mqttMaintain();
+
+  if (mqtt.connected()) {
+    if (millis() - healthPubAt > HEALTH_EVERY) publishHealth();
+  } else if (nodeUp[3]) {     // our own box goes dark the moment the link drops
+    nodeUp[3] = false;
+    dirty = true;
+  }
 
   ledUpdate();                 // runs every loop: throb/blink
   if (dirty) { dirty = false; render(); }

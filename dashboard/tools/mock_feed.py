@@ -389,7 +389,8 @@ class Feed:
     def iot_scenario(self) -> None:
         print("  IoT YELLOW — unusual activity")
         self.device("motion-yard", "Yard Motion", "motion", "Yard", "yellow", "Motion after hours")
-        self.alert("iot-yellow-1", "yellow", "Unusual motion detected",
+        self.device("smoke-detector", "Smoke Detector", "smoke", "Kitchen", "yellow", "Smoke sensed")
+        self.alert("iot-yellow-1", "yellow", "Unusual activity detected",
                    "iot/motion-yard", "Yard motion triggered at 02:14 — no one home.")
         if self.pause(2):
             return
@@ -397,6 +398,7 @@ class Feed:
         self.device("door-front", "Front Door", "lock", "Entrance", "red", "Opened unexpectedly", locked=False)
         self.device("camera-front", "Front Camera", "camera", "Entrance", "red", "Person detected", on=True)
         self.device("campfire", "Campfire", "extinguish", "Backyard", "red", "Smoldering")
+        self.device("smoke-detector", "Smoke Detector", "smoke", "Kitchen", "red", "Smoke alarm", on=True)
         self.alert("iot-red-1", "red", "Intrusion alert — door + camera",
                    "iot/door-front", "Front door opened + camera person detection. Alert sent to owner.")
         if self.pause(2):
@@ -410,6 +412,8 @@ class Feed:
                     on=True, automation="Air purifier boosted")
         self.device("campfire", "Campfire", "extinguish", "Backyard", "purple", "Extinguished",
                     burning=False, automation="Campfire extinguished by automation")
+        self.device("smoke-detector", "Smoke Detector", "smoke", "Kitchen", "purple", "HVAC boost",
+                    on=True, automation="HVAC boosted for smoke clearance")
         self.alert("iot-purple-1", "purple", "Automation executed — home secured",
                    "iot/auto", "Door locked, camera high-res, air purifier boosted, campfire extinguished.")
         if self.pause(3):
@@ -419,6 +423,7 @@ class Feed:
         self.device("camera-front", "Front Camera", "camera", "Entrance", "green", "Armed recording", on=True)
         self.device("air-purifier", "Air Purifier", "purifier", "Living Room", "green", "On auto", on=True)
         self.device("campfire", "Campfire", "extinguish", "Backyard", "green", "Burning", burning=True)
+        self.device("smoke-detector", "Smoke Detector", "smoke", "Kitchen", "green", "Clear")
         self.device("motion-yard", "Yard Motion", "motion", "Yard", "green", "Clear")
 
     def stop(self) -> None:

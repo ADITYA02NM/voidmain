@@ -172,7 +172,7 @@ async def test_catalogue_is_complete_enough_to_build_buttons(ctx):
     r = await ctx.client.get("/debug/triggers", headers=_hdrs(sid))
     assert r.status == 200
     cat = await r.json()
-    assert len(cat["devices"]) == len(triggers.DEVICES) == 5
+    assert len(cat["devices"]) == len(triggers.DEVICES)
     assert set(cat["sevs"]) == set(triggers.SEVS)
     assert {"story", "score", "alert", "device", "health", "edge", "preset"} <= set(cat["groups"])
     assert all(set(d["states"]) == set(triggers.SEVS) for d in cat["devices"])

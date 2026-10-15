@@ -78,8 +78,14 @@ def band_for_score(score: int) -> str:
     return "GREEN"
 
 
-# ── IoT devices (5) — the base seed AND the debug console's buttons ───────────
+# ── IoT devices (6) — the base seed AND the debug console's buttons ───────────
 DEVICES: tuple[dict, ...] = (
+    {"id": "smoke-detector", "name": "Smoke Detector", "kind": "smoke", "room": "Kitchen",
+     "states": {"green": {"state": "Clear"},
+                "yellow": {"state": "Smoke sensed"},
+                "red": {"state": "Smoke alarm", "on": True},
+                "purple": {"state": "HVAC boost", "on": True,
+                           "automation": "HVAC boosted for smoke clearance"}}},
     {"id": "campfire", "name": "Campfire", "kind": "extinguish", "room": "Backyard",
      "states": {"green": {"state": "Burning", "burning": True},
                 "yellow": {"state": "Waning", "burning": True},

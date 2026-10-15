@@ -5,7 +5,7 @@ import { useReducedMotion } from "../hooks/useNow";
 
 const KIND_ICON: Record<string, string> = {
   lock: "🔒", light: "💡", thermostat: "🌡", garage: "🚪", plug: "🔌",
-  motion: "🚶", smoke: "🔥", leak: "💧", camera: "📷", purifier: "💨", curtain: "🪟",
+  motion: "🚶", smoke: "🚨", leak: "💧", camera: "📷", purifier: "💨", curtain: "🪟",
 };
 const SEV_COLOR: Record<string, string> = {
   green: "var(--green)", yellow: "var(--yellow)", red: "var(--red)", purple: "var(--purple)",

@@ -1,11 +1,11 @@
 #pragma once
 // ---- VoidMain ESP32 risk mini configuration ----
-// WiFi: house network (SSID is case-sensitive — ALL CAPS per scan)
-#define WIFI_SSID "CURVE02NM"
-#define WIFI_PASSWORD "iuji7321"
+// WiFi: Farlands Hackathon (laptop wlan0 — same LAN, same AP)
+#define WIFI_SSID "Farlands Hackathon"
+#define WIFI_PASSWORD "farlands@2026"
 
-// MQTT broker = laptop LAN IP (mosquitto listens on 0.0.0.0:1883)
-#define MQTT_HOST "10.200.87.1"
+// MQTT broker = laptop's wlan0 IP (Farlands LAN); mosquitto listens on 0.0.0.0:1883
+#define MQTT_HOST "10.10.8.97"
 #define MQTT_PORT 1883
 #define MQTT_CLIENT_ID "voidmain-esp32-mini"
 
@@ -15,5 +15,5 @@
 #define OLED_SCL 6
 #define OLED_ADDR 0x3C
 
-// Simulated-data label shown on the OLED
-#define SIM_LABEL "SIMULATED"
+// Data label shown on the OLED
+#define SIM_LABEL "VOIDMAIN"
