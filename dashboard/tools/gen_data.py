@@ -50,58 +50,76 @@ def generate_alerts(days: int) -> list[dict]:
     start = now - days * 86400
     t = start
     n = 0
+    i = 0
     while t <= now:
         r = random.random()
-        if r < 0.5:
+        if r < 0.22:
             sev = "info"
             title = random.choice([
                 "Routine check — all sensors nominal",
                 "Scheduled sweep: no anomalies",
                 "System health check passed",
                 "Background calibration complete",
+                "Environmental baseline re-established",
+                "Node heartbeat gap recovered",
             ])
-            src = random.choice(["risk/engine", "iot/auto", "health/pi4"])
-        elif r < 0.75:
+            src = random.choice(["risk/engine", "iot/auto", "health/pi4", "health/pi3a"])
+        elif r < 0.46:
             sev = "yellow"
             title = random.choice([
                 "Unusual activity detected",
-                "Water leak under sink",
+                "Perimeter sensor triggered after hours",
                 "Node pi3a heartbeat lost",
-                "Motion after hours — yard",
                 "Temperature rising — hallway",
                 "Moisture detected — utility room",
+                "Air purifier filter low",
+                "Perimeter zone watch — slow drift",
+                "Repeated motion pattern — yard",
             ])
-            src = random.choice(["iot/motion-yard", "iot/leak-utility", "health/pi3a", "iot/thermostat"])
-        elif r < 0.93:
+            src = random.choice(["iot/perimeter-yard", "iot/leak-utility", "health/pi3a", "iot/thermostat", "iot/air-purifier"])
+        elif r < 0.74:
             sev = "red"
             title = random.choice([
-                "Intrusion alert — door + camera",
-                "Smoke threshold exceeded — kitchen",
-                "Front door opened unexpectedly",
+                "Intrusion alert — door + camera + perimeter",
                 "Perimeter breach detected",
+                "Front door opened unexpectedly",
                 "Camera person detection — entrance",
+                "Campfire smoldering — unattended",
+                "Perimeter tamper alert — backyard",
+                "Multi-zone alert — entrance + yard",
             ])
-            src = random.choice(["iot/door-front", "iot/camera-front", "iot/door-front"])
+            src = random.choice(["iot/door-front", "iot/camera-front", "iot/perimeter-yard", "iot/campfire"])
         else:
             sev = "purple"
             title = random.choice([
                 "Automation executed — home secured",
                 "All doors locked — perimeter secure",
-                "Cameras switched to high-res recording",
                 "Air purifier boosted — air quality restored",
                 "Campfire extinguished by automation",
+                "Perimeter integrity restored",
+                "Cameras switched to high-res recording",
+                "Door + camera + perimeter response",
+                "Full perimeter lockdown completed",
             ])
             src = "iot/auto"
-        body = f"Automated alert from {src}. Timestamp: {datetime.fromtimestamp(t, tz=timezone.utc).isoformat()}."
+        body = (
+            f"Automated alert from {src}. "
+            f"Sensor snapshot: score in band {random.choice(['GREEN','YELLOW','RED','PURPLE'])}, "
+            f"{random.choice(['perimeter clear','perimeter breached','door locked','door ajar','camera armed','camera person','campfire burning','campfire smoldering','air purifier boosted','air purifier off'])}. "
+            f"Timestamp: {datetime.fromtimestamp(t, tz=timezone.utc).isoformat()}."
+        )
         n += 1
-        aid = f"gen-{sev}-{n:04d}-{t}"
-        ack = random.random() < 0.7
+        aid = f"gen-{sev}-{n:05d}-{t}"
+        ack = random.random() < 0.62
         alarms.append({
             "id": aid, "sev": sev, "title": title, "src": src,
             "body": body, "ts": t, "ack": ack,
-            "ack_ts": t + random.randint(10, 300) if ack else None,
+            "ack_ts": t + random.randint(8, 240) if ack else None,
         })
-        t += random.randint(60, 1800)
+        t += random.randint(10, 420)
+        i += 1
+        if i % 5000 == 0:
+            t = min(now, t + random.randint(1, 600))
     alarms.sort(key=lambda a: a["ts"])
     return alarms
 
@@ -132,20 +150,30 @@ async def _write(db_path, points, alarms):
                 (a["id"], a["ts"], a["sev"], a["title"], a["src"], a["body"],
                  1 if a["ack"] else 0, a["ack_ts"]),
             )
-        # extra device state events for rich IoT panel
+        # extra device state events for rich IoT panel (5-device fleet)
         now = int(time.time())
-        for dev in DEVICES:
-            for sev in SEVS:
-                ts = now - random.randint(3600, 86400 * 3)
-                payload = device_payload(dev["id"], sev, ts)
-                await db.execute(
-                    "INSERT OR IGNORE INTO alerts (id, ts, sev, title, src, body, ack, ack_ts) VALUES (?, ?, ?, ?, ?, ?, 1, ?)",
-                    (f"dev-{dev['id']}-{sev}-{ts}", ts, sev,
-                     f"{dev['name']} — {payload['state']}",
-                     f"iot/{dev['id']}",
-                     f"Device state: {payload['state']}",
-                     ts),
-                )
+        # device state event pool — one row per device per severity spread across 30 days
+        # so every device tile on the dashboard has a visible history.
+        fleet = [
+            ("campfire", "extinguish", "Backyard", "Burning", "Waning", "Smoldering", "Extinguished"),
+            ("air-purifier", "purifier", "Living Room", "On auto", "Filter low", "Off", "Boosted"),
+            ("door-front", "lock", "Entrance", "Locked", "Ajar", "Opened unexpectedly", "Auto-locked"),
+            ("camera-front", "camera", "Entrance", "Armed recording", "Motion clip saved", "Person detected", "High-res recording"),
+            ("perimeter", "perimeter", "Yard", "Clear", "Motion after hours", "Perimeter breached", "Perimeter secured"),
+        ]
+        for did, kind, room, g_state, y_state, r_state, p_state in fleet:
+            for sev, state in (("green", g_state), ("yellow", y_state), ("red", r_state), ("purple", p_state)):
+                base = now - 86400 * 30
+                for offset in sorted(random.sample(range(0, 86400 * 30, 3600), k=360)):
+                    ts = base + offset
+                    await db.execute(
+                        "INSERT OR IGNORE INTO alerts (id, ts, sev, title, src, body, ack, ack_ts) VALUES (?, ?, ?, ?, ?, ?, 1, ?)",
+                        (f"dev-{did}-{sev}-{ts}", ts, sev,
+                         f"{did} — {state}",
+                         f"iot/{did}",
+                         f"Device state: {state}",
+                         ts),
+                    )
         # LAN events
         for _ in range(40):
             ts = now - random.randint(3600, 86400 * 5)

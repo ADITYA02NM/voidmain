@@ -31,19 +31,19 @@ GROUPS: tuple[str, ...] = ("story", "score", "alert", "device", "health", "edge"
 PRESETS: tuple[dict, ...] = (
     {"id": "preset/green-warm", "group": "preset",
      "label": "GREEN · warm baseline",
-     "hint": "Score 10, all 17 devices GREEN, nodes up."},
+     "hint": "Score 10, all 5 devices GREEN, nodes up."},
     {"id": "preset/green-idle", "group": "preset",
      "label": "GREEN · quiet idle",
      "hint": "Score 3, heartbeat only."},
     {"id": "preset/yellow-motion", "group": "preset",
-     "label": "YELLOW · motion + thermostat + leak",
-     "hint": "Hall + yard motion after hours, 24C rising, moisture detected."},
+     "label": "YELLOW · perimeter + environmental",
+     "hint": "Perimeter sensor after hours, air purifier filter low."},
     {"id": "preset/red-intrusion", "group": "preset",
-     "label": "RED · intrusion (door + camera)",
-     "hint": "Front door opened unexpectedly + camera person detection + smoke."},
+     "label": "RED · intrusion (door + camera + perimeter)",
+     "hint": "Front door opened unexpectedly + camera person detection + perimeter breach."},
     {"id": "preset/purple-automation", "group": "preset",
      "label": "PURPLE · automation executed",
-     "hint": "Doors locked, lights on, cameras high-res, garage closed."},
+     "hint": "Door locked, camera high-res, air purifier boosted, campfire extinguished, perimeter secured."},
     {"id": "preset/full-tour", "group": "preset",
      "label": "FULL TOUR · GREEN→YELLOW→RED→PURPLE→GREEN",
      "hint": "Plays the whole colour story, then resets to GREEN."},
@@ -78,14 +78,12 @@ def band_for_score(score: int) -> str:
     return "GREEN"
 
 
-# ── IoT devices (6) — the base seed AND the debug console's buttons ───────────
+# ── IoT devices (5) — the base seed AND the debug console's buttons ───────────
+# Fleet: campfire, air-purifier, door-front, camera-front, perimeter.
+# The perimeter integrity sensor is the second environmental detection source
+# in the YELLOW/RED story so the demo keeps a coherent multi-sensor trigger
+# without carrying a sixth device.
 DEVICES: tuple[dict, ...] = (
-    {"id": "smoke-detector", "name": "Smoke Detector", "kind": "smoke", "room": "Kitchen",
-     "states": {"green": {"state": "Clear"},
-                "yellow": {"state": "Smoke sensed"},
-                "red": {"state": "Smoke alarm", "on": True},
-                "purple": {"state": "HVAC boost", "on": True,
-                           "automation": "HVAC boosted for smoke clearance"}}},
     {"id": "campfire", "name": "Campfire", "kind": "extinguish", "room": "Backyard",
      "states": {"green": {"state": "Burning", "burning": True},
                 "yellow": {"state": "Waning", "burning": True},
@@ -110,11 +108,16 @@ DEVICES: tuple[dict, ...] = (
                 "red": {"state": "Person detected", "on": True},
                 "purple": {"state": "High-res recording", "on": True,
                            "automation": "Camera switched to high-res"}}},
-    {"id": "motion-yard", "name": "Yard Motion", "kind": "motion", "room": "Yard",
+    {"id": "perimeter", "name": "Perimeter Sensor", "kind": "perimeter", "room": "Yard",
      "states": {"green": {"state": "Clear"},
                 "yellow": {"state": "Motion after hours"},
-                "red": {"state": "Person detected"},
-                "purple": {"state": "Cleared", "automation": "Area swept"}}},
+                "red": {"state": "Perimeter breached"},
+                "purple": {"state": "Perimeter secured", "automation": "Perimeter integrity restored"}}},
+    {"id": "smoke-detector", "name": "Smoke Detector", "kind": "smoke", "room": "Kitchen",
+     "states": {"green": {"state": "Clear"},
+                "yellow": {"state": "Haze detected"},
+                "red": {"state": "Smoke alarm sounding"},
+                "purple": {"state": "Suppression active", "automation": "Fire suppression deployed"}}},
 )
 
 DEVICE_IDS: frozenset[str] = frozenset(d["id"] for d in DEVICES)
@@ -213,10 +216,18 @@ def validate(tid: str, v: object = None, s: object = None) -> tuple[bool, str]:
         if s not in SEVS:
             return False, f"device needs s in {SEVS}"
     elif tid == "health":
+        # health triggers are for node heartbeats (pi4/pi3a/pi3b/esp32),
+        # not for IoT devices.
         if v not in NODES:
             return False, f"health needs v in {NODES}"
         if s not in ("up", "down"):
             return False, "health needs s=up|down"
+    elif tid == "iot":
+        # IoT device trigger: v is the device id, s is the desired severity.
+        if v not in DEVICE_IDS:
+            return False, f"unknown device: {v!r}"
+        if s not in SEVS:
+            return False, f"device needs s in {SEVS}"
     elif tid.startswith("preset/"):
         if v not in (None, 0, ""):
             return False, "presets take no v/s — they are fixed sequences"

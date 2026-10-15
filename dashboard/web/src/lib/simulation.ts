@@ -35,7 +35,6 @@ export class Simulation {
   private scoreTimer = 0;
   private healthTimer = 0;
   private chaosTimer = 0;
-  private hue = 0;
   private reconnectTimer = 0;
 
   isRunning(): boolean { return this.running; }
@@ -114,20 +113,14 @@ export class Simulation {
   }
 
   private clearTimers(): void {
-    for (const id of this.beatTimers) window.clearTimeout(id);
+    for (const id of this.beatTimers) clearTimeout(id);
     this.beatTimers = [];
-    if (this.scoreTimer) window.clearInterval(this.scoreTimer);
-    if (this.healthTimer) window.clearInterval(this.healthTimer);
-    if (this.chaosTimer) window.clearInterval(this.chaosTimer);
+    if (this.scoreTimer) clearInterval(this.scoreTimer);
+    if (this.healthTimer) clearInterval(this.healthTimer);
+    if (this.chaosTimer) clearInterval(this.chaosTimer);
     this.scoreTimer = 0;
     this.healthTimer = 0;
     this.chaosTimer = 0;
-  }
-
-  private rainbow(): string {
-    this.hue = (this.hue + 3) % 360;
-    const h = this.hue;
-    return `hsl(${h},85%,62%)`;
   }
 
   private flash(msg: string, sev: string, big?: boolean): void {
@@ -232,8 +225,7 @@ export class Simulation {
 
       // ---- YELLOW ramp: fast, jittery ----
       { at: 10000, run: () => {
-        this.dev("motion-yard", "Yard Motion", "motion", "Yard", "yellow", "Motion detected");
-        this.toast("Yard motion", "yellow");
+        this.iotScenario();
         this.target = 32;
       } },
       { at: 12000, run: () => {
@@ -258,11 +250,7 @@ export class Simulation {
         this.flash("Intrusion pattern developing", "red");
       } },
       { at: 21500, run: () => {
-        this.target = 70;
-        this.dev("door-front", "Front Door", "lock", "Entrance", "red", "Opened unexpectedly", { locked: false });
-        this.dev("camera-front", "Front Camera", "camera", "Entrance", "red", "Person detected", { on: true });
-        this.dev("campfire", "Campfire", "extinguish", "Backyard", "red", "Smoldering");
-        this.alert("red", "Intrusion alert — door + camera", "iot/door-front", "Front door opened + camera person detection. Alert dispatched to owner.");
+        this.iotAlertPhase();
         this.flash("RED — alerts sent to owner", "red", true);
       } },
       { at: 23500, run: () => {
@@ -291,9 +279,7 @@ export class Simulation {
         this.flash("Camera high-res", "purple");
       } },
       { at: 36000, run: () => {
-        this.dev("air-purifier", "Air Purifier", "purifier", "Living Room", "purple", "Boosted", { on: true, automation: "Air purifier boosted" });
-        this.dev("campfire", "Campfire", "extinguish", "Backyard", "purple", "Extinguished", { burning: false, automation: "Campfire extinguished by automation" });
-        this.alert("purple", "Automation executed — home secured", "iot/auto", "Door locked, camera high-res, air purifier boosted, campfire extinguished.");
+        this.iotAutomationPhase();
         this.flash("PURPLE — home secured", "purple", true);
       } },
       { at: 38000, run: () => this.cmd("/clear-filter") },
@@ -368,9 +354,9 @@ export class Simulation {
 
   private scheduleCycle(): void {
     for (const b of this.beats()) {
-      this.beatTimers.push(window.setTimeout(() => {
+      this.beatTimers.push(setTimeout(() => {
         if (this.running) b.run(this.cycle);
-      }, b.at));
+      }, b.at) as unknown as number);
     }
   }
 
@@ -400,7 +386,7 @@ export class Simulation {
 
   private startReconnectWatch(): void {
     this.clearTimers();
-    this.reconnectTimer = window.setInterval(() => {
+    this.reconnectTimer = setInterval(() => {
       if (!this.running) { this.stopReconnectWatch(); return; }
       if (transport.live) {
         // still bus-backed, keep watching
@@ -410,11 +396,11 @@ export class Simulation {
         this.runLocal();
         this.stopReconnectWatch();
       }
-    }, 2000);
+    }, 2000) as unknown as number;
   }
 
   private stopReconnectWatch(): void {
-    if (this.reconnectTimer) { window.clearInterval(this.reconnectTimer); this.reconnectTimer = 0; }
+    if (this.reconnectTimer) { clearInterval(this.reconnectTimer); this.reconnectTimer = 0; }
   }
 
   private runLocal(): void {
@@ -422,9 +408,9 @@ export class Simulation {
     this.clearTimers();
     this.healthPump();
     this.scorePump();
-    this.scoreTimer = window.setInterval(this.scorePump, SCORE_TICK_MS);
-    this.healthTimer = window.setInterval(this.healthPump, HEALTH_TICK_MS);
-    this.chaosTimer = window.setInterval(this.chaosPump, 900);
+    this.scoreTimer = setInterval(this.scorePump, SCORE_TICK_MS) as unknown as number;
+    this.healthTimer = setInterval(this.healthPump, HEALTH_TICK_MS) as unknown as number;
+    this.chaosTimer = setInterval(this.chaosPump, 900) as unknown as number;
     this.scheduleCycle();
   }
 

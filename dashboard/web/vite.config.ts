@@ -18,11 +18,14 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/ws": {
-        target: "ws://localhost:8081",
+        target: process.env.VOIDMAIN_WS_URL || "ws://localhost:8080",
         ws: true,
       },
-      "/healthz": "http://localhost:8081",
-      "/auth": "http://localhost:8081",
+      "/healthz": process.env.VOIDMAIN_BACKEND_URL || "http://localhost:8080",
+      "/auth": process.env.VOIDMAIN_BACKEND_URL || "http://localhost:8080",
+      "/debug": process.env.VOIDMAIN_BACKEND_URL || "http://localhost:8080",
+      "/debug.html": process.env.VOIDMAIN_BACKEND_URL || "http://localhost:8080",
+      "/alerts": process.env.VOIDMAIN_BACKEND_URL || "http://localhost:8080",
     },
   },
 });

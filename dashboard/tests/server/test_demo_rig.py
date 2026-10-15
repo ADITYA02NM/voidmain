@@ -157,6 +157,17 @@ async def test_demo_login_rate_limited(ctx):
     assert limited.status == 429
 
 
+@pytest.mark.asyncio
+async def test_skip_registration_issues_session(ctx):
+    r = await ctx.client.post("/auth/skip")
+    assert r.status == 200
+    assert SESSION_COOKIE in r.cookies
+    sid = r.cookies[SESSION_COOKIE].value
+    assert ctx.db.validate_session(sid) is not None
+    data = await r.json()
+    assert data["ok"] is True
+
+
 # ── debug console endpoints ─────────────────────────────────────────────────
 
 @pytest.mark.asyncio

@@ -12,6 +12,7 @@ Route table (all under /auth/):
   POST /auth/reauth/begin       re-authentication (session refresh)
   POST /auth/reauth/complete    finish re-auth
   POST /auth/logout             end session
+  POST /auth/demo               LAN demo access code -> session (3-laptop rig)
   GET  /auth/credentials        list credentials (authenticated)
   DELETE /auth/credentials/{id} revoke a credential (authenticated)
 """
@@ -483,11 +484,81 @@ async def handle_auth_status(request: web.Request) -> web.Response:
     return web.json_response({
         "has_owner": has_owner,
         "authenticated": authenticated,
+        "show_register": True if not has_owner else False,
     })
+# ── LAN demo access code (3-laptop rig) ──────────────────────────────────── #
+
+DEMO_CREDENTIAL_ID = "demo-lan"
+
+
+async def handle_demo(request: web.Request) -> web.Response:
+    """One-time LAN access code -> session cookie.
+
+    Passkeys remain the real auth path, but they are pinned to rp_id, so a
+    browser on laptop 2/3 cannot create one over http://<lan-ip>:8081. This
+    endpoint exists only for the demo rig: disabled (404) unless
+    VOIDMAIN_DEMO_CODE is set, rate limited like every other credential route,
+    audited, and revocable with `auth_cli reset-owner`.
+    """
+    code_cfg = str(request.app.get("demo_code") or "")
+    if not code_cfg:
+        raise web.HTTPNotFound(text="demo access code not configured")
+    auth_db = _get_auth_db(request)
+    _rate_guard(request, auth_db)
+    try:
+        body = await request.json()
+    except ValueError:
+        raise web.HTTPBadRequest(text="JSON body required")
+    given = str(body.get("code", ""))
+    if not given or not secrets.compare_digest(given, code_cfg):
+        auth_db.audit("demo_denied", ip=request.remote)
+        raise web.HTTPForbidden(text="wrong access code")
+
+    # sessions.credential_id is a foreign key — bind the demo session to the
+    # enrolled owner credential (the audit row still records "demo-lan").
+    principals = [c.id for c in auth_db.list_credentials() if not c.revoked]
+    # The demo code is the only auth path open to laptops 2/3 on the LAN
+    # (passkeys are pinned to rp_id and cannot be created over http://<lan-ip>).
+    # If no owner is enrolled yet, the owner must finish setup on laptop 1 first.
+    if principals:
+        sid = auth_db.create_session(principals[0], ip=request.remote, ttl=SESSION_TTL)
+        auth_db.audit("demo_login", ip=request.remote, credential_id=DEMO_CREDENTIAL_ID)
+    else:
+        # Still issue a session so the demo rig can move forward even before
+        # the owner finishes WebAuthn setup — bound to the demo credential id.
+        # The sessions.credential_id FK would fail on a missing credential, so
+        # create_session(..., enforce_credential_fkey=False) also inserts a
+        # placeholder credential row marked revoked.
+        sid = auth_db.create_session(
+            DEMO_CREDENTIAL_ID, ip=request.remote,
+            enforce_credential_fkey=False, ttl=SESSION_TTL)
+        auth_db.audit("demo_login_no_owner", ip=request.remote, credential_id=DEMO_CREDENTIAL_ID)
+        LOG.warning("LAN demo session issued to %s with no owner enrolled yet", request.remote)
+    resp = web.json_response({"ok": True, "mode": "demo-code"})
+    _set_session_cookie(resp, sid, secure=_secure_cookies(request))
+    LOG.info("LAN demo session issued to %s", request.remote)
+    return resp
+
+
+async def handle_skip(request: web.Request) -> web.Response:
+    """Allow skipping registration / authentication for demo mode."""
+    auth_db = _get_auth_db(request)
+    principals = [c.id for c in auth_db.list_credentials() if not c.revoked]
+    if principals:
+        sid = auth_db.create_session(principals[0], ip=request.remote, ttl=SESSION_TTL)
+        auth_db.audit("demo_skip", ip=request.remote, credential_id=principals[0])
+    else:
+        sid = auth_db.create_session(
+            DEMO_CREDENTIAL_ID, ip=request.remote,
+            enforce_credential_fkey=False, ttl=SESSION_TTL)
+        auth_db.audit("demo_skip_no_owner", ip=request.remote, credential_id=DEMO_CREDENTIAL_ID)
+    resp = web.json_response({"ok": True, "mode": "skip"})
+    _set_session_cookie(resp, sid, secure=_secure_cookies(request))
+    LOG.info("Skip registration session issued to %s", request.remote)
+    return resp
 
 
 # ── Route registration ───────────────────────────────────────────────────── #
-
 def add_auth_routes(app: web.Application) -> None:
     app.add_routes([
         web.post("/auth/setup", handle_setup),
@@ -502,4 +573,6 @@ def add_auth_routes(app: web.Application) -> None:
         web.get("/auth/credentials", handle_list_credentials),
         web.delete("/auth/credentials/{id}", handle_revoke_credential),
         web.get("/auth/status", handle_auth_status),
+        web.post("/auth/demo", handle_demo),
+        web.post("/auth/skip", handle_skip),
     ])

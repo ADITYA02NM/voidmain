@@ -23,7 +23,8 @@ static uint32_t pack(uint8_t r, uint8_t g, uint8_t b) {
   return ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
 }
 
-// band colours (VoidMain tokens.css)
+// band colours (VoidMain tokens.css) — dark, saturated, exact rails:
+// green #3ac870, yellow #d4b030, red #d04838, purple #a060d0, offline blue #386cd0.
 static const uint32_t RGB_GREEN  = pack(0x3a, 0xc8, 0x70);
 static const uint32_t RGB_YELLOW = pack(0xd4, 0xb0, 0x30);
 static const uint32_t RGB_RED    = pack(0xd0, 0x48, 0x38);
@@ -44,6 +45,7 @@ static LedMode ledMode = LED_OFFLINE;
 
 static int  score = 0;
 static char band[12] = "GREEN";
+static char lastDevice[24] = "";
 static bool dirty = true;
 
 // 4 node boxes: pi4, pi3a, pi3b, esp32
@@ -81,6 +83,9 @@ static void ledUpdate() {
     case LED_ALERT:   color = RGB_RED;    throb = false; break;
     case LED_ACTION:  color = RGB_PURPLE; throb = true;  break;
     default:          color = RGB_BLUE;   throb = true;  break; // offline/connecting
+
+    // Keep band colours exactly on-rail: no extra tint/shift. Red must read
+    // as exact red (#d04838), never teal/cyan, even when dimmed/breathing.
   }
   uint8_t bri;
   if (throb) {
@@ -90,6 +95,8 @@ static void ledUpdate() {
   } else {
     bri = ((now / 250) & 1) ? 255 : 0;  // hard blink @2Hz
   }
+  // Scale brightness but keep the hue exact — offline blue is a dim pulse,
+  // band colours stay saturated (no teal/cyan shift on red).
   uint8_t r = (uint8_t)((color >> 16) * bri / 255);
   uint8_t g = (uint8_t)((color >> 8 & 0xFF) * bri / 255);
   uint8_t b = (uint8_t)((color & 0xFF) * bri / 255);
@@ -151,6 +158,17 @@ static void render() {
       ledMode == LED_NORMAL  ? "NORMAL" : "OFFLINE";
   display->setCursor(bx, h >= 64 ? 26 : 22);
   display->print(st);
+
+  // last IoT device that moved the panel (5-device fleet on the bus)
+  if (lastDevice[0]) {
+    display->setTextSize(1);
+    display->setCursor(0, h >= 64 ? 40 : 30);
+    int maxW = h >= 64 ? 120 : 120;
+    char clipped[24];
+    strncpy(clipped, lastDevice, sizeof(clipped) - 1);
+    clipped[sizeof(clipped) - 1] = '\0';
+    display->print(clipped);
+  }
 
   // 4 node boxes along the bottom
   int boxW = 28, boxH = 16, gap = 4;
@@ -242,6 +260,16 @@ static void bootAnimation() {
   dirty = true;  // loop() takes over with the risk scoreboard
 }
 
+// ---- IoT device topic pointers (5-device fleet) ----
+static const char* DEVICE_TOPIC_CAMPFIRE  = "voidmain/device/campfire";
+static const char* DEVICE_TOPIC_PURIFIER  = "voidmain/device/air-purifier";
+static const char* DEVICE_TOPIC_DOOR      = "voidmain/device/door-front";
+static const char* DEVICE_TOPIC_CAMERA    = "voidmain/device/camera-front";
+static const char* DEVICE_TOPIC_PERIMETER = "voidmain/device/perimeter";
+
+// Direct LED mirror from the debug console / FPGA-tinysim colour strip.
+static const char* ESP32_LED_TOPIC = "voidmain/sim/esp32-led";
+
 // ---- WiFi (non-blocking) ----
 static void wifiStart() {
   WiFi.mode(WIFI_STA);
@@ -319,7 +347,13 @@ static void onMqtt(char* topic, byte* payload, unsigned int len) {
     else if (!strcmp(sev, "yellow") || !strcmp(sev, "warn")) ledMode = LED_DETECT;
     else if (!strcmp(sev, "purple")) ledMode = LED_ACTION;
   } else if (strstr(topic, "device/")) {
-    // automation flag -> purple action
+    // IoT device state (campfire, air-purifier, door-front, camera-front, perimeter).
+    // An automation flag or a non-green severity moves the panel LED in step with
+    // the dashboard + debug console so all three views read one bus.
+    const char* devName = doc["name"] | "";
+    if (strlen(devName) > 0) {
+      strlcpy(lastDevice, devName, sizeof(lastDevice));
+    }
     if (doc["automation"] | false) ledMode = LED_ACTION;
     else {
       const char* sev = doc["sev"] | "";
@@ -327,6 +361,13 @@ static void onMqtt(char* topic, byte* payload, unsigned int len) {
       else if (!strcmp(sev, "yellow")) ledMode = LED_DETECT;
       else if (!strcmp(sev, "purple")) ledMode = LED_ACTION;
     }
+  } else if (strstr(topic, "sim/esp32-led")) {
+    const char* led = doc["led"] | "";
+    if (!strcmp(led, "green"))      ledMode = LED_NORMAL;
+    else if (!strcmp(led, "yellow")) ledMode = LED_DETECT;
+    else if (!strcmp(led, "red"))    ledMode = LED_ALERT;
+    else if (!strcmp(led, "purple")) ledMode = LED_ACTION;
+    strlcpy(lastDevice, "LED", sizeof(lastDevice));
   }
   dirty = true;
 }
@@ -341,10 +382,8 @@ static void mqttMaintain() {
       mqtt.subscribe("voidmain/health/#");
       mqtt.subscribe("voidmain/alert/#");
       mqtt.subscribe("voidmain/device/#");
-      mqtt.subscribe("voidmain/sim/score");
-      mqtt.subscribe("voidmain/sim/stop");
-      mqtt.subscribe("voidmain/sim/service_state");
-      mqtt.subscribe("voidmain/sim/global_state");
+      mqtt.subscribe("voidmain/sim/esp32-led");
+
       Serial.println("[mqtt] connected");
       publishHealth();  // retained heartbeat -> dashboard tile + own node box
       if (ledMode == LED_OFFLINE) ledMode = LED_NORMAL;
@@ -373,6 +412,8 @@ void setup() {
   mqtt.setServer(MQTT_HOST, MQTT_PORT);
   mqtt.setBufferSize(1024);
   mqtt.setCallback(onMqtt);
+
+  Serial.println("[hw] 5-device fleet: campfire, air-purifier, door-front, camera-front, perimeter");
 }
 
 void loop() {

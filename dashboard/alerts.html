@@ -23,12 +23,12 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--mono);fon
 h1{font-family:var(--serif);font-weight:400;font-size:18px;margin:0 0 4px;letter-spacing:.12em}
 h1 b{color:var(--green);font-weight:700}
 h1 span{font-family:var(--sans);font-size:10px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;margin-left:8px}
-h2{font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
 .topbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 12px;padding-bottom:10px;border-bottom:1px solid var(--border)}
 .chip{padding:4px 8px;border:1px solid var(--border2);border-radius:var(--radius);font-family:var(--sans);font-size:10px;font-weight:600;letter-spacing:.08em}
 .chip.live{color:var(--green);border-color:var(--green)}
 .chip.stale{color:var(--yellow);border-color:var(--yellow)}
 .chip.offline{color:var(--red);border-color:var(--red)}
+.chip.locked{color:var(--red);border-color:var(--red);background:var(--red-tint)}
 .empty-state{text-align:center;padding:40px 16px;color:var(--muted);font-family:var(--serif);font-style:italic}
 .alert{border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;background:var(--panel)}
 .alert .bar{display:block;width:3px;height:100%;border-radius:2px;margin:-10px -12px 0 -12px}
@@ -51,23 +51,32 @@ h2{font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:.08em;t
 .alert .body{font-size:12px;color:var(--muted);margin-bottom:6px}
 .alert .meta{display:flex;gap:8px;align-items:center;font-size:10px;color:var(--muted2);font-family:var(--mono);flex-wrap:wrap}
 .alert .meta .ack{color:var(--green)}
-.alert.acked{opacity:.5}
+.alert.acked{opacity:.55}
 .alert.acked .ttl{text-decoration:line-through}
 .wrap{max-width:600px;margin:0 auto}
 .stats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .stat{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;flex:1;min-width:80px;text-align:center}
 .stat .v{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--text)}
 .stat .k{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:2px;font-family:var(--sans)}
+.auth{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 12px;padding:10px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius)}
+.auth input{flex:1;min-width:140px;background:var(--panel2);border:1px solid var(--border2);color:var(--text);border-radius:var(--radius);padding:6px 8px;font-family:var(--mono);font-size:14px;letter-spacing:.12em}
+.auth button{background:var(--green);color:#100e0c;border:1px solid var(--green);font-family:var(--sans);font-weight:700;font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:6px 10px;border-radius:var(--radius);cursor:pointer}
+.auth button:hover{filter:brightness(1.1)}
+.auth .hint{font-size:10px;color:var(--muted);font-family:var(--sans)}
 footer{max-width:600px;margin:16px auto 0;padding:8px 0 24px;border-top:1px solid var(--border);color:var(--muted2);font-size:10px;display:flex;justify-content:space-between;flex-wrap:wrap}
-.sp{flex:1}
 </style>
 </head>
 <body>
 <div class="topbar">
   <h1>Void<b>Main</b><span>Alerts · phone</span></h1>
-  <span class="chip" id="conn">—</span>
-  <span class="sp"></span>
+  <span class="chip offline" id="conn">OFFLINE</span>
   <span style="font-size:11px;color:var(--muted2);font-family:var(--mono)"><span id="count">0</span> alerts</span>
+</div>
+
+<div id="auth-box" class="auth">
+  <input id="code" type="password" placeholder="LAN access code" autocomplete="off">
+  <button id="unlock">Unlock</button>
+  <span class="hint">Sign in once with the access code shown on laptop 1. The dashboard sign-in uses your passkey; laptops 2 and 3 and the phone use this code.</span>
 </div>
 
 <div class="wrap">
@@ -97,10 +106,14 @@ footer{max-width:600px;margin:16px auto 0;padding:8px 0 24px;border-top:1px soli
   var purpEl = document.getElementById("s-purple");
   var tsEl = document.getElementById("ts");
   var verEl = document.getElementById("ver");
+  var authBox = document.getElementById("auth-box");
+  var codeInput = document.getElementById("code");
+  var unlockBtn = document.getElementById("unlock");
 
   var seen = new Set();
   var alerts = [];
   var timer = null;
+  var locked = false;
 
   function renderStats() {
     var open = 0, acked = 0, red = 0, purp = 0;
@@ -155,53 +168,60 @@ footer{max-width:600px;margin:16px auto 0;padding:8px 0 24px;border-top:1px soli
   }
 
   function esc(s) {
-    return String(s).replace(/[&<>"']/g, function(c) {
+    return String(s).replace(/[&<>\"']/g, function(c) {
       return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
     });
   }
 
+  function startPoll() {
+    if (timer) return;
+    timer = window.setInterval(fetchAlerts, 3000);
+  }
+  function stopPoll() {
+    if (timer) { clearInterval(timer); timer = null; }
+  }
+
   function fetchAlerts() {
+    if (locked) return;
     fetch("/alerts.json")
-      .then(function(r){ if (!r.ok) throw new Error("unauthorized"); return r.json(); })
+      .then(function(r){ if (!r.ok) throw new Error(r.status === 401 ? "unauthorized" : "fetch"); return r.json(); })
       .then(function(data) {
-        var changed = false;
         var incoming = data.alerts || [];
-        // merge: keep existing order, update ack status for known ids
         var incomingMap = {};
-        for (var i = 0; i < incoming.length; i++) {
-          incomingMap[incoming[i].id] = incoming[i];
-        }
+        for (var i = 0; i < incoming.length; i++) incomingMap[incoming[i].id] = incoming[i];
         var rebuilt = [];
-        var pending = {};
         for (var j = 0; j < alerts.length; j++) {
           var old = alerts[j];
           if (incomingMap[old.id]) {
-            var newer = incomingMap[old.id];
-            if (newer.ack !== old.ack || newer.ts !== old.ts) changed = true;
-            rebuilt.push(newer);
+            rebuilt.push(incomingMap[old.id]);
             delete incomingMap[old.id];
           } else {
             rebuilt.push(old);
           }
         }
-        // add new ones
         var ids = {};
         for (var k = 0; k < rebuilt.length; k++) ids[rebuilt[k].id] = true;
         for (var id in incomingMap) {
-          if (!ids[id]) {
-            rebuilt.unshift(incomingMap[id]);
-            changed = true;
-          }
+          if (!ids[id]) rebuilt.unshift(incomingMap[id]);
         }
-        if (rebuilt.length !== alerts.length) changed = true;
-        alerts = rebuilt.slice(0, 200);
-        if (changed) renderAlerts();
+        if (rebuilt.length !== alerts.length) {
+          alerts = rebuilt.slice(0, 200);
+          renderAlerts();
+        } else {
+          var changed = false;
+          for (var n = 0; n < alerts.length; n++) {
+            if (alerts[n].ack !== rebuilt[n].ack) { changed = true; break; }
+          }
+          if (changed) { alerts = rebuilt.slice(0, 200); renderAlerts(); }
+        }
       })
       .catch(function(err) {
         if (err.message === "unauthorized") {
+          locked = true;
           connEl.textContent = "LOCKED";
-          connEl.className = "chip offline";
-          alertsEl.innerHTML = '<div class="empty-state">Session expired — open the dashboard to re-authenticate</div>';
+          connEl.className = "chip locked";
+          authBox.style.display = "";
+          alertsEl.innerHTML = '<div class="empty-state">Session expired — enter the access code to continue</div>';
         }
       });
   }
@@ -210,11 +230,11 @@ footer{max-width:600px;margin:16px auto 0;padding:8px 0 24px;border-top:1px soli
     fetch("/healthz")
       .then(function(r){ return r.json(); })
       .then(function(h) {
-        var connected = h.mqtt_connected;
+        var connected = !!(h && h.mqtt_connected);
         var c = connEl;
         if (connected) { c.textContent = "LIVE"; c.className = "chip live"; }
         else { c.textContent = "DEGRADED"; c.className = "chip stale"; }
-        verEl.textContent = "v" + (h.version || "?");
+        verEl.textContent = "v" + (h && h.version ? h.version : "?");
       })
       .catch(function(){ /* ignore */ });
   }
@@ -227,14 +247,46 @@ footer{max-width:600px;margin:16px auto 0;padding:8px 0 24px;border-top:1px soli
     tsEl.textContent = hh + ":" + mm + ":" + ss + " UTC";
   }
 
-  fetchAlerts();
-  updateConn();
-  timer = window.setInterval(fetchAlerts, 3000);
-  window.setInterval(tick, 1000);
-  tick();
+  function unlock() {
+    var code = codeInput.value.trim();
+    if (!code) return;
+    unlockBtn.disabled = true;
+    unlockBtn.textContent = "Signing in…";
+    fetch("/auth/demo", { method: "POST", headers: { "Content-Type": "application/json" },
+                         body: JSON.stringify({ code: code }) })
+      .then(function(r){ return r.json(); })
+      .then(function(j) {
+        if (j && j.ok) {
+          locked = false;
+          authBox.style.display = "none";
+          alertsEl.innerHTML = '<div class="empty-state">Loading alerts…</div>';
+          fetchAlerts();
+          updateConn();
+          startPoll();
+        } else {
+          unlockBtn.disabled = false;
+          unlockBtn.textContent = "Unlock";
+          connEl.textContent = "DENIED";
+          connEl.className = "chip locked";
+        }
+      })
+      .catch(function() {
+        unlockBtn.disabled = false;
+        unlockBtn.textContent = "Unlock";
+        connEl.textContent = "OFFLINE";
+        connEl.className = "chip offline";
+      });
+  }
 
-  // refresh on focus (user comes back to the phone)
+  unlockBtn.addEventListener("click", unlock);
+  codeInput.addEventListener("keydown", function(e){ if (e.key === "Enter") unlock(); });
+
+  // refresh on focus (user returns to the phone)
   window.addEventListener("focus", function(){ fetchAlerts(); updateConn(); });
+
+  tick();
+  window.setInterval(tick, 1000);
+  updateConn();
 })();
 </script>
 </body>

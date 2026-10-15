@@ -6,6 +6,7 @@ import { useReducedMotion } from "../hooks/useNow";
 const KIND_ICON: Record<string, string> = {
   lock: "🔒", light: "💡", thermostat: "🌡", garage: "🚪", plug: "🔌",
   motion: "🚶", smoke: "🚨", leak: "💧", camera: "📷", purifier: "💨", curtain: "🪟",
+  extinguish: "🔥", perimeter: "🛡", led: "💡",
 };
 const SEV_COLOR: Record<string, string> = {
   green: "var(--green)", yellow: "var(--yellow)", red: "var(--red)", purple: "var(--purple)",
@@ -20,6 +21,9 @@ function matches(dev: IoTDevice, ev: UEvent): boolean {
   return s.includes(dev.name.toLowerCase()) || s.includes(dev.id.toLowerCase());
 }
 
+const SENSOR_KINDS = new Set(["perimeter", "smoke", "motion", "camera"]);
+const FLEET = new Set(["campfire", "air-purifier", "door-front", "camera-front", "perimeter", "smoke-detector"]);
+
 function IoTGraphImpl() {
   const iotMap = useStore((s) => s.iot);
   const events = useStore((s) => s.events);
@@ -27,7 +31,7 @@ function IoTGraphImpl() {
   const reduce = useReducedMotion();
   const [filter, setFilter] = useState<"all" | "alert" | "sensor" | "actuator">("all");
 
-  const devices = useMemo(() => Object.values(iotMap).sort((a, b) => a.name.localeCompare(b.name)), [iotMap]);
+  const devices = useMemo(() => Object.values(iotMap).filter((d) => FLEET.has(d.id)).sort((a, b) => a.name.localeCompare(b.name)), [iotMap]);
 
   const recent = useMemo(() => events.slice(0, 50), [events]);
   const litIds = useMemo(() => {
@@ -40,7 +44,6 @@ function IoTGraphImpl() {
     return set;
   }, [recent, devices]);
 
-  const SENSOR_KINDS = new Set(["motion", "smoke", "leak", "camera"]);
   const filtered = useMemo(() => {
     if (filter === "alert") return devices.filter((d) => d.sev !== "green");
     if (filter === "sensor") return devices.filter((d) => SENSOR_KINDS.has(d.kind));

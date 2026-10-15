@@ -20,7 +20,7 @@ from server.ws_session import SessionWsManager
 ORIGIN = "http://localhost:8080"
 
 
-class FakeHub:
+class StubHub:
     def __init__(self):
         self.sockets = set()
 
@@ -35,7 +35,7 @@ class FakeHub:
         return len(self.sockets)
 
 
-class FakeBridge:
+class StubBridge:
     connected = True
 
     def __init__(self):
@@ -62,8 +62,8 @@ async def ctx(tmp_db, monkeypatch):
 
     app = web.Application()
     app["cfg"] = SimpleNamespace(origins=[ORIGIN], evidence_db="unused")
-    app["hub"] = FakeHub()
-    app["bridge"] = FakeBridge()
+    app["hub"] = StubHub()
+    app["bridge"] = StubBridge()
     app["session_mgr"] = SessionWsManager()
     app["auth_db"] = tmp_db
     app.router.add_get("/ws", main.handle_ws)

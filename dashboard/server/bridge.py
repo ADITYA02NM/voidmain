@@ -18,6 +18,10 @@ from typing import Any
 
 from aiohttp import web
 
+from . import evidence
+from .triggers import PRESET_IDS, TRIGGER_IDS
+VALID_SIM_IDS: frozenset[str] = TRIGGER_IDS | PRESET_IDS
+
 try:
     import aiomqtt
 except ImportError:  # pragma: no cover
@@ -122,6 +126,17 @@ def map_message(topic: str, payload: bytes) -> dict[str, Any] | None:
         d.setdefault("state", "—")
         return {"t": "device", "d": d}
 
+    # 5-device fleet handled above; firmware mirrors the same device/# topic set
+    # (campfire, air-purifier, door-front, camera-front, perimeter) plus a direct
+    # LED mirror on voidmain/sim/esp32-led so laptop 3's LED-cycle button drives
+    # the NeoPixel in step with the dashboard + debug console.
+    if topic.startswith("voidmain/sim/esp32-led"):
+        d = data if isinstance(data, dict) else {}
+        d.setdefault("led", _leaf(topic))
+        return {"t": "device", "d": {"id": "esp32-led", "name": "ESP32 LED", "kind": "led",
+                                     "room": "Panel", "sev": str(d.get("led", "green")),
+                                     "state": f"LED {d.get('led', 'green')}"}}
+
     return None
 
 
@@ -188,6 +203,28 @@ class Bridge:
     def stop(self) -> None:
         self._stop.set()
 
+    async def publish_sim(self, action: str, data: dict | None = None) -> bool:
+        """Relay a demo trigger (SIM TOUR button or debug console) to the DEV
+        director on voidmain/sim/<id>.
+
+        Writes only voidmain/sim/* — the server never touches voidmain/risk/#.
+        tools/mock_feed.py subscribes here and publishes the event stream, so
+        dashboard, debug console and ESP32 OLED change together on the bus.
+        """
+        if action not in VALID_SIM_IDS:
+            return False
+        if self._client is None or not self.connected:
+            return False
+        body = dict(data) if data else {}
+        body.setdefault("ts", int(time.time()))
+        try:
+            await self._client.publish(f"voidmain/sim/{action}",
+                                       json.dumps(body).encode("utf-8"), qos=1)
+            return True
+        except Exception as exc:  # noqa: BLE001
+            LOG.warning("sim publish failed for %s: %s", action, exc)
+            return False
+
     async def run(self) -> None:
         if aiomqtt is None:
             LOG.error("aiomqtt not installed; live bridge disabled")
@@ -211,6 +248,8 @@ class Bridge:
                         mapped = map_message(str(message.topic), message.payload)
                         if mapped is not None:
                             await self.hub.broadcast(envelope(mapped["t"], mapped["d"], ts))
+                            # evidence log: replay for browsers that join later
+                            await evidence.record(self.cfg.evidence_db, mapped)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # noqa: BLE001

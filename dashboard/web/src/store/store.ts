@@ -1,6 +1,6 @@
 import { useCallback, useRef, useSyncExternalStore } from "react";
 import type { AlertD, Band, DeviceD, EventD, Envelope, LanD } from "../contracts/ws";
-import { isWorse } from "../lib/bands";
+import { bandForScore, isWorse } from "../lib/bands";
 import { ClockSync, LatencyWindow } from "../lib/latency";
 
 export type Conn = "live" | "stale" | "offline";
@@ -44,6 +44,7 @@ export interface IoTDevice {
   room: string;
   on?: boolean;
   locked?: boolean;
+  burning?: boolean;
   sev: string;
   state: string;
   automation?: string;
@@ -248,6 +249,11 @@ export class Store {
           s.score = v; s.scoreTs = env.ts;
           s.history = s.history.concat([[env.ts, v]]);
           if (s.history.length > 2880) s.history = s.history.slice(-2880);
+          const derivedBand = bandForScore(v);
+          if (derivedBand !== s.band) {
+            if (isWorse(derivedBand, s.band)) s.bandBump = s.bandBump + 1;
+            s.band = derivedBand;
+          }
           s.pipeline.govern = env.ts;
           break;
         }

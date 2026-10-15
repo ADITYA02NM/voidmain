@@ -10,6 +10,7 @@ venv/
 auth.db
 evidence.db
 auth.db-*
+.demo-code
 ca/
 ca.key
 certs/server.key

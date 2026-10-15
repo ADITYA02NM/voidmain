@@ -195,16 +195,36 @@ class AuthDB:
 
     def create_session(
         self, credential_id: str, ip: str | None = None,
+        *, enforce_credential_fkey: bool = True,
         ttl: int = 3600,
     ) -> str:
+        """Insert a session row. credential_id must reference credentials(id)
+        unless enforce_credential_fkey is False (used by the demo-code path,
+        which issues sessions before the owner has enrolled a passkey).
+        """
         sid = secrets.token_urlsafe(32)
         sid_hash = _sha256(sid)
         now = time.time()
-        self._db().execute(
-            "INSERT INTO sessions (id_hash, created_at, expires_at, credential_id, ip) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (sid_hash, now, now + ttl, credential_id, ip),
-        )
+        if enforce_credential_fkey:
+            self._db().execute(
+                "INSERT INTO sessions (id_hash, created_at, expires_at, credential_id, ip) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (sid_hash, now, now + ttl, credential_id, ip),
+            )
+        else:
+            # Insert a placeholder credential row so the sessions.credential_id
+            # foreign key is satisfied, even though no passkey is enrolled.
+            self._db().execute(
+                "INSERT OR REPLACE INTO credentials "
+                "(id, public_key, sign_count, created_at, revoked, device_type, backed_up) "
+                "VALUES (?, zeroblob(0), 0, ?, 1, NULL, 0)",
+                (credential_id, now),
+            )
+            self._db().execute(
+                "INSERT INTO sessions (id_hash, created_at, expires_at, credential_id, ip) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (sid_hash, now, now + ttl, credential_id, ip),
+            )
         self._db().commit()
         return sid
 

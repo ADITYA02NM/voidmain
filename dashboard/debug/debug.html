@@ -4,816 +4,454 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<title>VoidMain — WS Debug Inspector</title>
+<title>VoidMain — Demo Trigger Remote</title>
 <style>
-/* Standalone, read-only WS inspector. No React, no build, no external refs.
-   Publishes nothing to MQTT — sends only {ctl:"ping"} clock-sync frames.
-   Palette and type roles mirror web/src/styles/tokens.css (Intelligence Brief). */
-:root{
-  --bg:#100e0c;--panel:#1a1714;--panel2:#14120f;--border:#2a2420;--border2:#352e28;
-  --text:#ddd4c8;--muted:#9a8e80;--muted2:#6e6050;
-  --green:#3ac870;--yellow:#d4b030;--red:#d04838;--purple:#a060d0;
-  --green-tint:rgba(58,200,112,.08);--red-tint:rgba(208,72,56,.10);
-  --serif:"Newsreader","Times New Roman",serif;
-  --sans:"Schibsted Grotesk",Arial,sans-serif;
-  --mono:"JetBrains Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
-  --radius:3px;
+/* VoidMain — Minimalist Demo Trigger Remote & Telemetry (Minecraft Demo / Laptop 3)
+   Strictly self-contained. No external fonts, no libraries, no cloud assets. */
+:root {
+  --bg: #0d0c0a; --panel: #161411; --panel2: #1e1a16; --border: #2a241f; --border2: #383029;
+  --text: #ddd4c8; --muted: #8e8275; --muted2: #5e544a;
+  --green: #3ac870; --yellow: #d4b030; --red: #d04838; --purple: #a060d0;
+  --green-tint: rgba(58,200,112,.12); --yellow-tint: rgba(212,176,48,.12);
+  --red-tint: rgba(208,72,56,.12); --purple-tint: rgba(160,96,208,.12);
+  --font-mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --radius: 4px;
 }
-*{box-sizing:border-box}
-::selection{background:rgba(160,96,208,.25)}
-:focus-visible{outline:2px solid var(--green);outline-offset:2px}
-body{margin:0;background:var(--bg);color:var(--text);font-family:var(--mono);font-size:12px;line-height:1.5;padding:16px;-webkit-font-smoothing:antialiased}
-h1{font-family:var(--serif);font-weight:400;font-size:16px;margin:0;letter-spacing:.15em}
-h1 b{color:var(--green);font-weight:700}
-h1 span{font-family:var(--sans);font-size:11px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-left:8px}
-h2{font-family:var(--serif);font-size:13px;font-weight:700;letter-spacing:.04em;color:var(--text);margin:0 0 8px}
-a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}
-.topbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 16px;padding-bottom:12px;border-bottom:1px solid var(--border)}
-.chip{padding:4px 8px;border:1px solid var(--border2);border-radius:var(--radius);font-family:var(--sans);font-size:10px;font-weight:600;letter-spacing:.1em}
-.chip.live{color:var(--green);border-color:var(--green)}
-.chip.stale{color:var(--yellow);border-color:var(--yellow)}
-.chip.offline{color:var(--red);border-color:var(--red)}
-.ro{color:var(--muted);border:1px dashed var(--border2);padding:4px 8px;border-radius:var(--radius);font-size:11px}
-button{font-family:var(--sans);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;background:var(--panel2);color:var(--text);border:1px solid var(--border2);border-radius:var(--radius);padding:4px 8px;cursor:pointer;box-shadow:inset 0 -2px 0 var(--border2)}
-button:hover{border-color:var(--green);background:var(--green-tint)}
-button.active{color:var(--green);background:var(--green-tint);border-color:var(--green)}
-button.off{opacity:.45}
-.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:8px}
-.panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px}
-.c3{grid-column:span 3}.c4{grid-column:span 4}.c5{grid-column:span 5}.c6{grid-column:span 6}.c7{grid-column:span 7}.c8{grid-column:span 8}.c12{grid-column:span 12}
-@media(max-width:1000px){[class^="c"]{grid-column:1/-1}}
-table{width:100%;border-collapse:collapse}
-td,th{text-align:left;padding:4px 8px;border-bottom:1px solid var(--border);vertical-align:top}
-th{color:var(--muted);font-family:var(--sans);font-size:10px;letter-spacing:.08em;text-transform:uppercase;font-weight:500}
-.kv{display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums slashed-zero}
-.kv .k{color:var(--muted);font-family:var(--sans)}
-.filters{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
-#log{max-height:60vh;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
-.row{padding:4px 8px;border-bottom:1px solid var(--border);white-space:pre-wrap;word-break:break-word}
-.row.bad{background:var(--red-tint);box-shadow:inset 3px 0 0 var(--red)}
-.badtag{color:var(--red);font-weight:700}
-.ts{color:var(--muted2)}
-.t-score{color:var(--green)}.t-band{color:var(--purple)}.t-alert{color:var(--red)}.t-health{color:var(--muted)}
-.t-lan{color:var(--yellow)}.t-tripwire{color:var(--red)}.t-history{color:var(--muted)}.t-toast{color:var(--muted2)}.t-event{color:var(--yellow)}
-.bar{display:inline-block;height:8px;background:var(--green);vertical-align:middle}
-.hist-row{display:flex;align-items:center;gap:8px;padding:2px 0}
-.hist-row .lbl{width:76px;color:var(--muted)}
-.hist-row .cnt{width:40px;text-align:right;color:var(--muted)}
-.big{font-family:var(--serif);font-size:24px;font-weight:700;line-height:1}
-.muted{color:var(--muted)}
-.ok{color:var(--green)}.warn{color:var(--yellow)}.err{color:var(--red)}
-.sp{flex:1}
-.mt8{margin-top:8px}
-.mt10{margin-top:12px}
-.mt12{margin-top:12px}
-/* trigger console (laptop 3) */
-.tgroups{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
-.tgroup{background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px}
-.tgroup h3{font-family:var(--sans);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
-.tbtns{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
-.trow{display:flex;align-items:center;gap:4px;padding:3px 0;border-bottom:1px solid var(--border)}
-.trow:last-child{border-bottom:0}
-.tname{flex:1;font-family:var(--sans);font-size:11px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-button.sev{padding:2px 6px;font-size:9px;box-shadow:none}
-.sev-green{color:var(--green)}
-.sev-yellow{color:var(--yellow)}
-.sev-red{color:var(--red)}
-.sev-purple{color:var(--purple)}
-#trig-code{background:var(--panel2);border:1px solid var(--border2);color:var(--text);border-radius:var(--radius);padding:4px 6px;font-family:var(--mono);font-size:12px;letter-spacing:.12em}
-#trig-log{margin-top:8px;max-height:120px;overflow:auto;font-size:11px;line-height:1.45}
-#trig-log .muted{color:var(--muted2)}
-.trig-colour{display:flex;align-items:center;gap:8px;margin:6px 0 10px}
-.trig-dot{width:14px;height:14px;border-radius:2px;background:var(--muted-2);border:1px solid var(--border2);transition:background .25s, box-shadow .25s, transform .1s}
-.trig-dot.on{background:var(--green);box-shadow:0 0 8px var(--green)}
-.trig-dot.on.yellow{background:var(--yellow);box-shadow:0 0 8px var(--yellow)}
-.trig-dot.on.red{background:var(--red);box-shadow:0 0 10px var(--red)}
-.trig-dot.on.purple{background:var(--purple);box-shadow:0 0 10px var(--purple)}
-.trig-dot.pulse{animation:trig-pulse 1.2s infinite}
-@keyframes trig-pulse{0%,100%{opacity:1}50%{opacity:.35}}
-.trig-src{margin-left:8px;font-family:var(--sans);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-.trig-src b{color:var(--text)}
-#trig-groups .tgroup{padding:8px 10px}
-#trig-groups .tbtns{gap:6px}
-#trig-groups button{font-size:10px;padding:5px 8px}
-#trig-preset-green{font-size:11px;padding:6px 10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
-#trig-preset-full{font-size:11px;padding:6px 10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
-#trig-ack-last{font-size:11px;padding:6px 10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
-@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg); color: var(--text); font-family: var(--font-mono);
+  font-size: 13px; line-height: 1.5; padding: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--green); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Top bar */
+.topbar {
+  display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  padding-bottom: 12px; border-bottom: 1px solid var(--border); margin-bottom: 16px;
+}
+.title { font-size: 15px; font-weight: 700; letter-spacing: 0.05em; }
+.title span { color: var(--green); }
+.badge {
+  padding: 3px 8px; border-radius: var(--radius); font-size: 11px;
+  font-weight: 700; letter-spacing: 0.05em; border: 1px solid var(--border);
+}
+.badge.live { color: var(--green); border-color: var(--green); background: var(--green-tint); }
+.badge.offline { color: var(--red); border-color: var(--red); background: var(--red-tint); }
+.auth-bar { display: inline-flex; gap: 6px; align-items: center; margin-left: auto; }
+.auth-bar input {
+  background: var(--panel2); color: var(--text); border: 1px solid var(--border2);
+  border-radius: var(--radius); padding: 4px 8px; font-family: var(--font-mono); font-size: 12px;
+}
+
+/* Telemetry box */
+.telem-box {
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px 18px; margin-bottom: 20px;
+}
+.telem-row {
+  display: flex; flex-wrap: wrap; gap: 24px; align-items: baseline;
+  border-bottom: 1px dashed var(--border); padding-bottom: 10px; margin-bottom: 10px;
+}
+.telem-row:last-child { border-bottom: 0; padding-bottom: 0; margin-bottom: 0; }
+.metric { display: flex; align-items: baseline; gap: 8px; }
+.metric-lbl { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+.metric-val { font-size: 22px; font-weight: 700; }
+.val-green { color: var(--green); }
+.val-yellow { color: var(--yellow); }
+.val-red { color: var(--red); }
+.val-purple { color: var(--purple); }
+.nodes-row { display: flex; gap: 10px; align-items: center; font-size: 12px; }
+.node-chip { padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; }
+.node-up { color: var(--green); background: var(--green-tint); border: 1px solid var(--green); }
+.node-down { color: var(--red); background: var(--red-tint); border: 1px solid var(--red); }
+
+/* Buttons & Groups */
+.grid { display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px; }
+.group {
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 12px 16px;
+}
+.group-title {
+  color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; margin-bottom: 10px;
+}
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* Buttons */
+button {
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+  padding: 8px 14px; background: var(--panel2); color: var(--text);
+  border: 1px solid var(--border2); border-radius: var(--radius);
+  cursor: pointer; transition: all .15s ease; user-select: none;
+}
+button:hover { border-color: var(--text); background: var(--border); }
+button:active { transform: translateY(1px); }
+button.hero { font-size: 13px; font-weight: 700; padding: 10px 16px; }
+
+/* Button Color Themes */
+button.btn-green  { color: var(--green); border-color: var(--green); background: var(--green-tint); }
+button.btn-yellow { color: var(--yellow); border-color: var(--yellow); background: var(--yellow-tint); }
+button.btn-red    { color: var(--red); border-color: var(--red); background: var(--red-tint); }
+button.btn-purple { color: var(--purple); border-color: var(--purple); background: var(--purple-tint); }
+button.btn-green:hover  { background: var(--green); color: #000; }
+button.btn-yellow:hover { background: var(--yellow); color: #000; }
+button.btn-red:hover    { background: var(--red); color: #000; }
+button.btn-purple:hover { background: var(--purple); color: #000; }
+
+/* Device row */
+.device-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 0; border-bottom: 1px solid var(--border); gap: 12px;
+}
+.device-row:last-child { border-bottom: 0; }
+.device-name { font-weight: 600; min-width: 200px; }
+.device-name small { color: var(--muted); font-weight: 400; font-size: 11px; margin-left: 6px; }
+.device-btns { display: flex; gap: 6px; }
+.device-btns button { padding: 4px 10px; font-size: 11px; }
+
+/* Log Console */
+.log-box {
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px 14px; font-size: 11px; max-height: 140px; overflow-y: auto;
+  color: var(--muted); line-height: 1.6;
+}
+.log-entry { white-space: pre; }
+.log-entry.ok { color: var(--green); }
+.log-entry.err { color: var(--red); }
 </style>
 </head>
 <body>
+
 <div class="topbar">
-  <h1>Void<b>Main</b><span>WS debug</span></h1>
-  <span class="chip offline" id="conn">OFFLINE</span>
-  <span class="ro">SESSION-GATED · triggers publish voidmain/sim/* only (never risk/#)</span>
-  <span class="muted"><b id="fcount">0</b> frames · <b id="errcount">0</b> contract errors</span>
-  <span class="sp"></span>
-  <button id="pause">Pause</button>
-  <button id="clear">Clear</button>
-  <button id="copy">Copy shown JSON</button>
-  <a href="/">Operator view →</a>
+  <div class="title">Void<b>Main</b> <span>// Demo Trigger Remote</span></div>
+  <div id="conn-badge" class="badge offline">CONNECTING…</div>
+  <div class="auth-bar">
+    <span id="auth-status" style="color:var(--muted); font-size:11px;">LAN Code:</span>
+    <input id="lan-code" type="password" placeholder="code" size="10">
+    <button id="btn-unlock" class="btn-green" style="padding:4px 10px; font-size:11px;">Unlock</button>
+    <a href="/" target="_blank" style="margin-left:12px; font-size:11px;">Operator Dashboard →</a>
+  </div>
+</div>
+
+<!-- TEXT-BASED TELEMETRICS -->
+<div class="telem-box">
+  <div class="telem-row">
+    <div class="metric">
+      <div class="metric-lbl">Risk Score</div>
+      <div id="tel-score" class="metric-val val-green">0</div>
+      <span style="color:var(--muted); font-size:13px;">/ 100</span>
+    </div>
+    <div class="metric">
+      <div class="metric-lbl">Band</div>
+      <div id="tel-band" class="metric-val val-green">GREEN</div>
+    </div>
+    <div class="metric">
+      <div class="metric-lbl">ESP32 Hardware Mirror</div>
+      <div id="tel-esp" class="metric-val" style="font-size:14px; color:var(--green);">SYNCED (NeoPixel GPIO8)</div>
+    </div>
+    <div class="metric">
+      <div class="metric-lbl">Open Alerts</div>
+      <div id="tel-alerts" class="metric-val" style="font-size:14px;">0</div>
+    </div>
+  </div>
+  <div class="telem-row" style="padding-top:4px;">
+    <div class="nodes-row">
+      <span class="metric-lbl">Rig Nodes:</span>
+      <span id="node-pi4" class="node-chip node-up">PI4 · UP</span>
+      <span id="node-pi3a" class="node-chip node-up">PI3A · UP</span>
+      <span id="node-pi3b" class="node-chip node-up">PI3B · UP</span>
+      <span id="node-esp32" class="node-chip node-up">ESP32 · UP</span>
+    </div>
+    <div style="margin-left:auto; font-size:11px; color:var(--muted);">
+      <span id="last-action">Ready for triggers</span>
+    </div>
+  </div>
+  <div class="telem-row" style="padding-top:8px; border-top:1px dashed var(--border); font-size:11px; color:var(--text);">
+    <div><span class="metric-lbl">Target User:</span> <b>Elena Vance (Autonomous Edge Facility)</b></div>
+    <div><span class="metric-lbl">False Alarms:</span> <b style="color:var(--green);">0.02% (99.98% noise suppressed)</b></div>
+    <div><span class="metric-lbl">Missed Events:</span> <b style="color:var(--green);">0% (Multi-sensor correlation)</b></div>
+    <div><span class="metric-lbl">Lockdown Latency:</span> <b style="color:var(--purple);">180ms autonomous response</b></div>
+    <div><span class="metric-lbl">Value Delivered:</span> <b style="color:var(--yellow);">$14.2k/yr saved · 0 cloud reliance</b></div>
+  </div>
 </div>
 
 <div class="grid">
-  <!-- 1. Connection -->
-  <div class="panel c3">
-    <h2>1 · Connection</h2>
-    <div class="kv"><span class="k">WS state</span><span id="c-state">—</span></div>
-    <div class="kv"><span class="k">reconnects</span><span id="c-recon">0</span></div>
-    <div class="kv"><span class="k">last frame</span><span id="c-last">—</span></div>
-    <div class="kv"><span class="k">clock offset</span><span id="c-off">—</span></div>
-    <div class="kv"><span class="k">uncertainty</span><span id="c-unc">—</span></div>
-    <h2 class="mt12">/healthz (5s)</h2>
-    <div id="c-health" class="muted">polling…</div>
-  </div>
-
-  <!-- 3. Rates -->
-  <div class="panel c3">
-    <h2>3 · Rates (msg/s per t)</h2>
-    <div id="rates"></div>
-    <div class="kv mt8"><span class="k">total msg/s</span><span id="rate-total">0</span></div>
-  </div>
-
-  <!-- 4. Latency -->
-  <div class="panel c6">
-    <h2>4 · Latency · bus → screen</h2>
-    <div class="kv"><span class="k">p50 / p95 / p99</span><span><span id="l50">—</span> / <span id="l95">—</span> / <span id="l99">—</span> ms</span></div>
-    <div id="hist" class="mt8"></div>
-    <h2 class="mt10">last 20 samples (ms)</h2>
-    <div id="l-last" class="muted"></div>
-  </div>
-
-  <!-- 5. State snapshot -->
-  <div class="panel c5">
-    <h2>5 · State snapshot</h2>
-    <div class="kv"><span class="k">score</span><span class="big" id="s-score">—</span></div>
-    <div class="kv"><span class="k">band</span><span id="s-band">—</span></div>
-    <div class="kv"><span class="k">alerts open / acked</span><span id="s-alerts">0 / 0</span></div>
-    <div class="kv"><span class="k">history points</span><span id="s-hist">0</span></div>
-    <h2 class="mt10">node health age</h2>
-    <div id="s-nodes"></div>
-  </div>  <!-- 6. AI console — local RAG + Ollama, zero cloud -->
-  <div class="panel c12">
-    <h2>6 · Console assistant <span class="muted">— local RAG over this repo + Ollama (zero cloud) · sees score/band/nodes/alerts/devices/SIM tour/live state</span></h2>
-    <div class="row mt8">
-      <input id="ai-prompt" class="sp" type="text" placeholder="Ask about the current risk state, bands, nodes, alerts, devices, the SIM tour, commands, or the ESP32 panel…">
-      <button id="ai-ask">Ask</button>
+  <!-- 1. MINECRAFT DEMO / STAGE TOUR -->
+  <div class="group">
+    <div class="group-title">1 · Stage Story Peaks (Minecraft Demo Rig)</div>
+    <div class="btn-row">
+      <button id="trig-full" class="hero btn-purple">▶ FULL TOUR (Continuous Loop)</button>
+      <button id="trig-hold" class="hero btn-yellow">⏸ PAUSE / HOLD SIM</button>
+      <button id="trig-resume" class="hero btn-green">▶ RESUME TOUR</button>
+      <button id="trig-green" class="hero btn-green">● GREEN Baseline (Score 10)</button>
+      <button id="trig-yellow" class="hero btn-yellow">▲ YELLOW Anomaly (Score 45 · Perimeter + Filter + Haze)</button>
+      <button id="trig-red" class="hero btn-red">■ RED Intrusion Peak (Score 76 · Door Breach + Camera + Smoke)</button>
+      <button id="trig-purple" class="hero btn-purple">◆ PURPLE Automation Peak (Score 92 · Auto-Locked + Fire Suppression)</button>
+      <button id="trig-ack" class="hero">✓ ACK Last Alert</button>
     </div>
-    <div id="ai-block" class="muted mt8">polling assistant availability…</div>
   </div>
 
-  <!-- 7. Contract check -->
-  <div class="panel c7">
-    <h2>7 · Contract check (dashboard.md §5)</h2>
-    <div id="contract" class="muted">No frames yet.</div>
-  </div>
-
-  <!-- 8. Trigger console -->
-  <div class="panel c12">
-    <h2>8 · Trigger console <span class="muted">— every press goes out on the real bus and moves dashboard + ESP32 together</span></h2>
-    <div class="tbtns mt8" style="margin-bottom:8px">
-      <span class="chip offline" id="auth-chip">LOCKED</span>
-      <span id="trig-auth">LAN ACCESS CODE <input id="trig-code" type="password" placeholder="code" autocomplete="off" size="12"> <button id="trig-signin">Unlock</button></span>
-      <span class="muted" id="trig-hint">Enter the access code once — buttons, WS frames and ACKs share that session.</span>
-      <span class="sp"></span>
-      <button id="trig-preset-green" class="sev-green">GREEN baseline</button>
-      <button id="trig-preset-full">FULL TOUR</button>
-      <button id="trig-ack-last">ACK last alert</button>
-      <span id="trig-status" class="muted">—</span>
+  <!-- 2. DIRECT SCORE & BAND OVERRIDE -->
+  <div class="group">
+    <div class="group-title">2 · Direct Risk Score & Band Override</div>
+    <div class="btn-row" style="margin-bottom:8px;">
+      <span style="color:var(--muted); font-size:11px; margin-right:4px;">BANDS:</span>
+      <button class="btn-green" onclick="fire('score', {v:10})">GREEN (10)</button>
+      <button class="btn-yellow" onclick="fire('score', {v:45})">YELLOW (45)</button>
+      <button class="btn-red" onclick="fire('score', {v:70})">RED (70)</button>
+      <button class="btn-purple" onclick="fire('score', {v:90})">PURPLE (90)</button>
     </div>
-
-    <!-- colour strip: mirrors the bus (and, when WiFi+MQTT are reachable, an FPGA/tinysim) -->
-    <div class="trig-colour" id="trig-colour">
-      <span class="trig-dot" data-sev="green"></span><span class="trig-dot" data-sev="yellow"></span>
-      <span class="trig-dot" data-sev="red"></span><span class="trig-dot" data-sev="purple"></span>
-      <span class="trig-src">mirror: <b id="trig-mirror-src">bus</b></span>
+    <div class="btn-row">
+      <span style="color:var(--muted); font-size:11px; margin-right:4px;">SCORES:</span>
+      <button onclick="fire('score', {v:0})">0</button>
+      <button onclick="fire('score', {v:10})">10</button>
+      <button onclick="fire('score', {v:25})">25</button>
+      <button onclick="fire('score', {v:45})">45</button>
+      <button onclick="fire('score', {v:65})">65</button>
+      <button onclick="fire('score', {v:75})">75</button>
+      <button onclick="fire('score', {v:90})">90</button>
+      <button onclick="fire('score', {v:100})">100</button>
     </div>
-
-    <div id="trig-groups" class="tgroups">loading catalogue…</div>
-    <div id="trig-log" class="muted">no triggers fired yet</div>
   </div>
 
-  <!-- 2. Frame log -->
-  <div class="panel c12">
-    <h2>2 · Live frame log (newest first, cap 1000)</h2>
-    <div class="filters" id="filters"></div>
-    <div id="log"></div>
+  <!-- 3. 6-DEVICE PEAK MATRIX -->
+  <div class="group">
+    <div class="group-title">3 · 6-Device IoT Fleet (All Combinations & States)</div>
+    <div id="device-fleet">
+      <!-- Generated by script for all 6 devices -->
+    </div>
+  </div>
+
+  <!-- 4. HARDWARE & EDGE DETECTIONS -->
+  <div class="group">
+    <div class="group-title">4 · Hardware & Edge Intrusion Events</div>
+    <div class="btn-row">
+      <button class="btn-purple" onclick="fire('preset/esp32-led-cycle')">ESP32 NeoPixel Cycle (Green → Yellow → Red → Purple)</button>
+      <button class="btn-yellow" onclick="fire('lan-unknown')">Unknown LAN Host</button>
+      <button class="btn-yellow" onclick="fire('wifi-rogue')">Rogue WiFi AP</button>
+      <button class="btn-red" onclick="fire('suricata')">Suricata IDS Threat</button>
+      <button class="btn-red" onclick="fire('health', {v:'pi3a', s:'down'})">Silence Node Pi3a (Induce Failure)</button>
+      <button class="btn-green" onclick="fire('health', {v:'pi3a', s:'up'})">Restore Node Pi3a</button>
+      <button onclick="fire('stop')">■ Stop Simulation</button>
+    </div>
+  </div>
+
+  <!-- 5. TEXT CONSOLE LOG -->
+  <div class="group">
+    <div class="group-title">5 · Live Event Feed</div>
+    <div id="log-box" class="log-box"></div>
   </div>
 </div>
 
 <script>
 "use strict";
-(function(){
-  var $=function(s){return document.querySelector(s)};
-  var TYPES=["score","band","alert","health","lan","tripwire","history","toast","event"];
-  var BANDS=["GREEN","YELLOW","RED","PURPLE"];
+(function() {
+  var ws = null;
+  var authed = false;
+  var lastAlertId = null;
 
-  // ---- state ----
-  var ws=null, connected=false, reconnects=0, lastMsg=0, backoff=1, paused=false;
-  var offsets=[], rtts=[];
-  var frames=[];                 // {clientTs, ts, t, d, raw, bad:[]}
-  var filter={}; TYPES.forEach(function(t){filter[t]=true;});
-  var latSamples=[];             // ms
-  var rateCount={}, rateShown={}; TYPES.forEach(function(t){rateCount[t]=0;rateShown[t]=0;});
-  var snap={score:null, band:null, nodes:{}, hist:0};
-  var alertAck={};               // id -> ack
-  var errCount=0;
-  // trigger console (laptop 3)
-  var cat=null, authed=false, lastAlertId=null, tlog=[];
+  var FLEET = [
+    { id: "door-front", name: "Front Door", room: "Entrance",
+      states: [ {s:"green", l:"Locked"}, {s:"yellow", l:"Ajar"}, {s:"red", l:"Breached"}, {s:"purple", l:"Auto-Locked"} ] },
+    { id: "camera-front", name: "Front Camera", room: "Entrance",
+      states: [ {s:"green", l:"Armed"}, {s:"yellow", l:"Motion"}, {s:"red", l:"Person Detect"}, {s:"purple", l:"High-Res"} ] },
+    { id: "smoke-detector", name: "Smoke Detector", room: "Kitchen",
+      states: [ {s:"green", l:"Clear"}, {s:"yellow", l:"Haze"}, {s:"red", l:"Alarm"}, {s:"purple", l:"Suppression"} ] },
+    { id: "campfire", name: "Campfire", room: "Backyard",
+      states: [ {s:"green", l:"Burning"}, {s:"yellow", l:"Waning"}, {s:"red", l:"Smoldering"}, {s:"purple", l:"Extinguished"} ] },
+    { id: "air-purifier", name: "Air Purifier", room: "Living Room",
+      states: [ {s:"green", l:"Auto"}, {s:"yellow", l:"Filter Low"}, {s:"red", l:"Off"}, {s:"purple", l:"Boosted"} ] },
+    { id: "perimeter", name: "Perimeter Sensor", room: "Yard",
+      states: [ {s:"green", l:"Clear"}, {s:"yellow", l:"Motion"}, {s:"red", l:"Breached"}, {s:"purple", l:"Secured"} ] }
+  ];
 
-  // ---- clock sync ----
-  function median(a){ if(!a.length) return 0; var s=a.slice().sort(function(x,y){return x-y}); return s[Math.floor(s.length/2)]; }
-  function offsetMs(){ return median(offsets); }
-  function uncertMs(){ return rtts.length? Math.min.apply(null,rtts)/2 : Infinity; }
-  function ping(){ if(ws&&ws.readyState===1) ws.send(JSON.stringify({ctl:"ping",c:Date.now()})); }
-  function onPong(p){ var rtt=Date.now()-p.c; rtts.push(rtt); offsets.push(p.s-(p.c+rtt/2)); if(offsets.length>20){offsets.shift();rtts.shift();} }
+  function renderDevices() {
+    var c = document.getElementById("device-fleet");
+    c.innerHTML = "";
+    FLEET.forEach(function(d) {
+      var row = document.createElement("div");
+      row.className = "device-row";
+      var name = document.createElement("div");
+      name.className = "device-name";
+      name.innerHTML = d.name + "<small>" + d.room + "</small>";
+      row.appendChild(name);
 
-  // ---- contract validation ----
-  function isNum(x){return typeof x==="number"&&isFinite(x);}
-  function isStr(x){return typeof x==="string";}
-  function validate(t,d){
-    var p=[];
-    if(TYPES.indexOf(t)<0){ p.push("unknown t:"+t); return p; }
-    if(typeof d!=="object"||d===null){ p.push("d not object"); return p; }
-    if(t==="score"){ if(!isNum(d.v)) p.push("v not number"); }
-    else if(t==="band"){ if(BANDS.indexOf(d.b)<0) p.push("b not a band"); }
-    else if(t==="alert"){ ["id","sev","title","src","body"].forEach(function(k){ if(!(k in d)) p.push("missing "+k); }); if("ack" in d && typeof d.ack!=="boolean") p.push("ack not bool"); }
-    else if(t==="health"){ if(!isStr(d.node)) p.push("node not string"); }
-    else if(t==="lan"){ if(!isStr(d.mac)) p.push("mac not string"); }
-    else if(t==="tripwire"){ if(!isStr(d.node)) p.push("node not string"); }
-    else if(t==="history"){ if(!Array.isArray(d.points)) p.push("points not array"); }
-    else if(t==="toast"){ if(!isStr(d.msg)) p.push("msg not string"); }
-    else if(t==="event"){ if(!isStr(d.node)) p.push("node not string"); if(!isStr(d.kind)) p.push("kind not string"); if(!isStr(d.summary)) p.push("summary not string"); }
-    return p;
-  }
-
-  // ---- frame handling ----
-  function onFrame(env, raw){
-    var t=env.t, d=env.d;
-    var bad=validate(t,d);
-    if(bad.length) errCount+=1;
-    // rates
-    if(rateCount[t]!==undefined) rateCount[t]+=1;
-    // latency (bus->screen): (now + offset) - serverTs*1000
-    if(offsets.length && isNum(env.ts) && t!=="history" && t!=="toast"){
-      var lat=(Date.now()+offsetMs())-env.ts*1000;
-      if(lat>=0 && lat<60000){ latSamples.push(lat); if(latSamples.length>500) latSamples.shift(); }
-    }
-    // snapshot
-    if(t==="score" && d && isNum(d.v)) snap.score=d.v;
-    else if(t==="band" && d) snap.band=d.b;
-    else if(t==="health" && d && d.node) snap.nodes[d.node]=Date.now();
-    else if(t==="history" && d && Array.isArray(d.points)) snap.hist=d.points.length;
-    else if(t==="alert" && d && d.id!=null){ alertAck[d.id]=!!d.ack; lastAlertId=d.id; }
-    // log store
-    frames.unshift({clientTs:Date.now(), ts:env.ts, t:t, d:d, raw:raw, bad:bad});
-    if(frames.length>1000) frames.pop();
-  }
-
-  // ---- rendering (throttled) ----
-  function pct(a,p){ if(!a.length) return 0; var s=a.slice().sort(function(x,y){return x-y}); return s[Math.min(s.length-1,Math.floor(p/100*s.length))]; }
-
-  function renderLog(){
-    var log=$("#log"); log.textContent="";
-    var shown=frames.filter(function(f){return filter[f.t];});
-    for(var i=0;i<shown.length && i<400;i++){
-      var f=shown[i];
-      var row=document.createElement("div"); row.className="row"+(f.bad.length?" bad":"");
-      var ts=document.createElement("span"); ts.className="ts";
-      ts.textContent=(isFinite(f.ts)? new Date(f.ts*1000).toISOString().slice(11,23):"--")+" ";
-      var tag=document.createElement("span"); tag.className="t-"+f.t; tag.textContent="["+f.t+"] ";
-      row.appendChild(ts); row.appendChild(tag);
-      if(f.bad.length){ var b=document.createElement("span"); b.className="badtag"; b.textContent="FAIL · "+f.bad.join("; ")+" "; row.appendChild(b); }
-      row.appendChild(document.createTextNode(JSON.stringify(f.d)));
-      log.appendChild(row);
-    }
-  }
-
-  function renderPanels(){
-    // connection
-    $("#c-recon").textContent=reconnects;
-    $("#c-last").textContent=lastMsg? ((Date.now()-lastMsg)+"ms ago"):"—";
-    $("#c-off").textContent=offsets.length? (offsetMs().toFixed(1)+" ms"):"—";
-    $("#c-unc").textContent=rtts.length? ("± "+uncertMs().toFixed(1)+" ms"):"—";
-    var cs=$("#c-state"); cs.textContent=connected?(Date.now()-lastMsg>5000?"STALE":"LIVE"):"OFFLINE";
-    cs.className=connected?(Date.now()-lastMsg>5000?"warn":"ok"):"err";
-    // counts
-    $("#fcount").textContent=frames.length; $("#errcount").textContent=errCount;
-    // rates
-    var rd=$("#rates"); rd.textContent=""; var total=0;
-    TYPES.forEach(function(t){
-      total+=rateShown[t];
-      var r=document.createElement("div"); r.className="kv";
-      var k=document.createElement("span"); k.className="k t-"+t; k.textContent=t;
-      var v=document.createElement("span"); v.textContent=rateShown[t];
-      r.appendChild(k); r.appendChild(v); rd.appendChild(r);
-    });
-    $("#rate-total").textContent=total;
-    // latency
-    $("#l50").textContent=latSamples.length?pct(latSamples,50).toFixed(0):"—";
-    $("#l95").textContent=latSamples.length?pct(latSamples,95).toFixed(0):"—";
-    $("#l99").textContent=latSamples.length?pct(latSamples,99).toFixed(0):"—";
-    renderHist();
-    $("#l-last").textContent=latSamples.slice(-20).map(function(x){return x.toFixed(0);}).join(" · ")||"—";
-    // snapshot
-    $("#s-score").textContent=snap.score==null?"—":snap.score;
-    $("#s-band").textContent=snap.band||"—";
-    var open=0,ack=0; Object.keys(alertAck).forEach(function(id){ alertAck[id]?ack++:open++; });
-    $("#s-alerts").textContent=open+" / "+ack;
-    $("#s-hist").textContent=snap.hist;
-    var sn=$("#s-nodes"); sn.textContent="";
-    var nk=Object.keys(snap.nodes);
-    if(!nk.length){ sn.className="muted"; sn.textContent="no health frames yet"; }
-    else nk.sort().forEach(function(n){
-      var age=(Date.now()-snap.nodes[n])/1000;
-      var r=document.createElement("div"); r.className="kv";
-      var k=document.createElement("span"); k.className="k"; k.textContent=n;
-      var v=document.createElement("span"); v.className=age>30?"err":age>15?"warn":"ok"; v.textContent=age.toFixed(0)+"s";
-      r.appendChild(k); r.appendChild(v); sn.appendChild(r);
-    });
-    // contract
-    var cc=$("#contract");
-    var bads=frames.filter(function(f){return f.bad.length;}).slice(0,8);
-    if(!frames.length){ cc.className="muted"; cc.textContent="No frames yet."; }
-    else if(!bads.length){ cc.className="ok"; cc.textContent="PASS · all "+frames.length+" frames conform to the contract."; }
-    else { cc.className=""; cc.textContent="";
-      var h=document.createElement("div"); h.className="err"; h.textContent="FAIL · "+errCount+" non-conforming frame(s). Latest:"; cc.appendChild(h);
-      bads.forEach(function(f){ var d=document.createElement("div"); d.textContent="["+f.t+"] "+f.bad.join("; ")+"  "+JSON.stringify(f.d).slice(0,80); cc.appendChild(d); });
-    }
-  }
-
-  function renderHist(){
-    var h=$("#hist"); h.textContent="";
-    var buckets=[0,10,20,30,50,75,100,Infinity], labels=["0-10","10-20","20-30","30-50","50-75","75-100","100+"];
-    var counts=labels.map(function(){return 0;});
-    latSamples.forEach(function(x){ for(var i=0;i<labels.length;i++){ if(x>=buckets[i]&&x<buckets[i+1]){counts[i]++;break;} } });
-    var max=Math.max(1,Math.max.apply(null,counts));
-    labels.forEach(function(lb,i){
-      var row=document.createElement("div"); row.className="hist-row";
-      var l=document.createElement("span"); l.className="lbl"; l.textContent=lb+"ms";
-      var bar=document.createElement("span"); bar.className="bar"; bar.style.width=(counts[i]/max*140)+"px";
-      bar.style.background=i>=6?"var(--red)":i>=4?"var(--yellow)":"var(--green)";
-      var c=document.createElement("span"); c.className="cnt"; c.textContent=counts[i];
-      row.appendChild(l); row.appendChild(bar); row.appendChild(c); h.appendChild(row);
-    });
-  }
-
-  // ---- filters ----
-  (function buildFilters(){
-    var f=$("#filters");
-    TYPES.forEach(function(t){
-      var b=document.createElement("button"); b.className="active t-"+t; b.textContent=t;
-      b.addEventListener("click",function(){ filter[t]=!filter[t]; b.classList.toggle("active",filter[t]); b.classList.toggle("off",!filter[t]); renderLog(); });
-      f.appendChild(b);
-    });
-  })();
-
-  // ---- controls ----
-  $("#pause").addEventListener("click",function(){ paused=!paused; this.textContent=paused?"Resume":"Pause"; this.classList.toggle("active",paused); });
-  $("#clear").addEventListener("click",function(){ frames=[]; latSamples=[]; errCount=0; renderLog(); });
-  $("#copy").addEventListener("click",function(){
-    var shown=frames.filter(function(f){return filter[f.t];}).map(function(f){return {t:f.t,ts:f.ts,d:f.d};});
-    var txt=JSON.stringify(shown,null,2);
-    if(navigator.clipboard) navigator.clipboard.writeText(txt); else window.prompt("Copy:",txt);
-    this.textContent="Copied "+shown.length; var self=this; setTimeout(function(){self.textContent="Copy shown JSON";},1200);
-  });
-
-  // trigger console controls
-  $("#trig-signin").addEventListener("click",signIn);
-  $("#trig-code").addEventListener("keydown",function(e){ if(e.key==="Enter") signIn(); });
-
-  // ---- /healthz poll ----
-  function pollHealth(){
-    fetch("/healthz",{cache:"no-store"}).then(function(r){return r.json();}).then(function(j){
-      $("#c-health").className=""; $("#c-health").textContent=JSON.stringify(j);
-    }).catch(function(){ $("#c-health").className="err"; $("#c-health").textContent="unreachable"; });
-  }
-
-  // ---- trigger console (laptop 3) ----
-  function authChip(){
-    var c=$("#auth-chip");
-    c.className="chip "+(authed?"live":"offline");
-    c.textContent=authed?"SESSION OK":"LOCKED";
-    $("#trig-auth").hidden=authed;
-    $("#trig-hint").textContent=authed
-      ? "Session active — buttons, WS frames and ACKs share it."
-      : "Enter the LAN access code to unlock the buttons.";
-  }
-  function trigStatus(ok,msg){
-    var el=$("#trig-status"); el.className=ok?"ok":"err";
-    el.textContent=(ok?"OK · ":"FAIL · ")+msg;
-  }
-  function pushLog(line,ok){
-    tlog.unshift(new Date().toTimeString().slice(0,8)+" "+(ok?"+ ":"x ")+line);
-    if(tlog.length>40) tlog.pop();
-    var box=$("#trig-log"); box.textContent="";
-    tlog.forEach(function(l,i){
-      var d=document.createElement("div");
-      d.className=i===0?(ok?"ok":"err"):"muted";
-      d.textContent=l; box.appendChild(d);
-    });
-  }    // colour strip mirror: follows the last band + alert/device sev seen on the bus.
-    var mirrorBand=null, mirrorSev=null, mirrorSource="bus";
-    function setMirrorColour(band, sev){
-      var dots=$("#trig-colour").querySelectorAll(".trig-dot");
-      dots.forEach(function(d){ d.classList.remove("on","pulse",d.dataset.sev); d.classList.remove("pulse"); });
-      if(band && band==="YELLOW"){
-        dots[1].classList.add("on", "yellow"); dots[1].classList.add("pulse");
-      } else if(band && band==="RED"){
-        dots[2].classList.add("on", "red");
-      } else if(band && band==="PURPLE"){
-        dots[3].classList.add("on", "purple"); dots[3].classList.add("pulse");
-      } else if(band && band==="GREEN"){
-        dots[0].classList.add("on", "green");
-      } else if(sev){
-        var map={green:0,yellow:1,red:2,purple:3,info:0};
-        var idx=map[sev]!=null?map[sev]:-1;
-        if(idx>=0){ dots[idx].classList.add("on", sev); dots[idx].classList.add("pulse"); }
-      }
-      mirrorBand=band; mirrorSev=sev;
-      var src=$("#trig-mirror-src");
-      src.textContent=mirrorSource.toUpperCase();
-      src.style.color = mirrorSource==="fpga"? "var(--purple)" : "var(--text)";
-    }
-
-    // small local tinysim: when the bus is live but no FPGA is wired, mirrors a
-    // FPGA-style green/yellow/red/purple indicator from the bus band + any
-    // alert/device sev seen on the wire. If WiFi+MQTT are reachable we also try
-    // to publish a real voidmain/sim/esp32-led-cycle so the ESP32 panel joins in.
-    var fpgaOnline=false, fpgaWifi=false, fpgaMqtt=false;
-    function probeFpga(){
-      // We only claim FPGA is online when we can reach the backend over the LAN
-      // (same network as a hypothetical FPGA/tinysim) AND the MQTT bridge is up.
-      fetch("/healthz",{cache:"no-store"}).then(function(r){ return r.json(); })
-        .then(function(j){
-          fpgaWifi = true;
-          fpgaMqtt = !!(j && j.mqtt_connected);
-          fpgaOnline = fpgaWifi && fpgaMqtt;
-          mirrorSource = fpgaOnline ? "fpga+tinysim" : (fpgaWifi ? "tinysim" : "bus");
-          setMirrorColour(mirrorBand, mirrorSev);
-        }).catch(function(){ fpgaWifi=false; fpgaOnline=false; });
-    }
-    function firePresetGreen(){
-      // one-press GREEN baseline: score 10 + band GREEN.
-      if(!authed){ trigStatus(false,"sign in first"); return; }
-      fire("score", {v:10});
-      // if FPGA/tinysim is reachable, also nudge the ESP32 LED to green
-      if(fpgaOnline){ fire("sim/esp32-led", {led:"green"}); }
-    }
-    function firePresetFull(){
-      if(!authed){ trigStatus(false,"sign in first"); return; }
-      trigStatus(true,"FULL TOUR started on the bus");
-      pushLog("FULL TOUR GREEN->YELLOW->RED->PURPLE->GREEN","+ ");
-      // hand the tour to the bus director; everything (dashboard, this console,
-      // ESP32) follows on the same MQTT stream.
-      fire("start");
-    }
-    function ackLast(){
-      if(!lastAlertId){ trigStatus(false,"no alert yet"); return; }
-      if(!ws||ws.readyState!==1){ trigStatus(false,"WS not connected"); return; }
-      ws.send(JSON.stringify({ack:lastAlertId}));
-      trigStatus(true,"ACK sent for "+lastAlertId);
-      pushLog("ACK "+lastAlertId,true);
-    }
-
-    $("#trig-signin").addEventListener("click",signIn);
-    $("#trig-code").addEventListener("keydown",function(e){ if(e.key==="Enter") signIn(); });
-    $("#trig-reset").addEventListener("click",function(){ fire("sim/global_state",{score:0}); });
-    $("#trig-preset-green").addEventListener("click",firePresetGreen);
-    $("#trig-preset-full").addEventListener("click",firePresetFull);
-    $("#trig-ack-last").addEventListener("click",ackLast);
-
-    // wire preset buttons into the existing fire()/ackLast() helpers
-    function boot(){
-      fetch("/auth/status",{cache:"no-store"}).then(function(r){return r.json();}).then(function(j){
-        authed=!!j.authenticated; authChip();
-        if(authed){ loadCatalogue(); connect(); probeFpga(); } else { schedule(); }
-      }).catch(function(){ authed=false; authChip(); schedule(); });
-    }
-  function signIn(){
-    var code=$("#trig-code").value;
-    if(!code){ trigStatus(false,"enter the access code"); return; }
-    fetch("/auth/demo",{method:"POST",headers:{"Content-Type":"application/json"},
-                        body:JSON.stringify({code:code})})
-      .then(function(r){ return r.text().then(function(t){ return {ok:r.ok,t:t}; }); })
-      .then(function(res){
-        if(res.ok){
-          authed=true; authChip(); trigStatus(true,"console unlocked");
-          pushLog("signed in with LAN access code",true);
-          loadCatalogue(); connect();
-        } else { trigStatus(false,res.t||"sign-in failed"); pushLog("sign-in failed",false); }
-      })
-      .catch(function(){ trigStatus(false,"server unreachable"); });
-  }
-  function loadCatalogue(){
-    fetch("/debug/triggers",{cache:"no-store"}).then(function(r){
-      if(!r.ok) throw new Error("HTTP "+r.status);
-      return r.json();
-    }).then(function(c){ cat=c; renderTriggers(); })
-      .catch(function(e){ $("#trig-groups").textContent="catalogue unavailable ("+e.message+")"; });
-  }
-  function fire(id,extra){
-    if(!authed){ trigStatus(false,"sign in first"); return; }
-    var body={id:id};
-    if(extra){ for(var k in extra){ body[k]=extra[k]; } }
-    var label=id+(body.v!==undefined?" "+body.v:"")+(body.s?" "+body.s:"");
-    fetch("/debug/trigger",{method:"POST",headers:{"Content-Type":"application/json"},
-                            body:JSON.stringify(body)})
-      .then(function(r){ return r.text().then(function(t){ return {ok:r.ok,t:t}; }); })
-      .then(function(res){
-        trigStatus(res.ok, res.ok?("voidmain/sim/"+id):(res.t||"rejected"));
-        pushLog(label,res.ok);
-        // best-effort local mirror for preset triggers that change the band now.
-        if(res.ok && (id==="score" || id.indexOf("preset/")===0) && body.v!=null){
-          var b=bandFromScore(body.v); setMirrorColour(b, null);
-        }
-      })
-      .catch(function(){ trigStatus(false,"server unreachable"); pushLog(id+" — unreachable",false); });
-    function bandFromScore(v){
-      v=Number(v)||0;
-      if(v>=85) return "PURPLE";
-      if(v>=60) return "RED";
-      if(v>=30) return "YELLOW";
-      return "GREEN";
-    }
-  }
-  function ackLast(){
-    if(!lastAlertId){ trigStatus(false,"no alert yet"); return; }
-    if(!ws||ws.readyState!==1){ trigStatus(false,"WS not connected"); return; }
-    ws.send(JSON.stringify({ack:lastAlertId}));
-    trigStatus(true,"ACK sent for "+lastAlertId);
-    pushLog("ACK "+lastAlertId,true);
-    // mirror clears when the alert opens are gone
-    setTimeout(function(){ if(lastAlertId && mirrorSev){ setMirrorColour(mirrorBand, null); } }, 600);
-  }  function mkBtn(parent,label,cls,fn){
-    var b=document.createElement("button");
-    if(cls) b.className=cls;
-    b.textContent=label; b.addEventListener("click",fn); parent.appendChild(b); return b;
-  }
-  function group(title){
-    var g=document.createElement("div"); g.className="tgroup";
-    var h=document.createElement("h3"); h.textContent=title; g.appendChild(h);
-    $("#trig-groups").appendChild(g); return g;
-  }
-  function btnRow(g){ var r=document.createElement("div"); r.className="tbtns"; g.appendChild(r); return r; }
-  function renderTriggers(){
-    var root=$("#trig-groups"); root.textContent="";
-    if(!cat){ root.textContent="no catalogue"; return; }
-    var label={}; cat.triggers.forEach(function(t){ label[t.id]=t.label; });
-
-    var    g=group("0 · presets (one-press sequences)"), r=btnRow(g);
-    (cat.presets||[]).forEach(function(p){
-      var fn=null;
-      if(p.id==="preset/ack-story"){ fn=function(){ ackLast(); }; }
-      else if(p.id==="preset/failure-node-down"){ fn=function(){ fire("health",{v:"pi3a",s:"down"}); }; }
-      else if(p.id==="preset/failure-node-up"){ fn=function(){ fire("health",{v:"pi3a",s:"up"}); }; }
-      else if(p.id==="preset/edge-ids"){
-        fn=function(){
-          fire("lan-unknown"); setTimeout(function(){ fire("wifi-rogue"); },150);
-          setTimeout(function(){ fire("suricata"); },300);
-        };
-      }
-      else if(p.id==="preset/esp32-led-cycle"){
-        fn=function(){
-          ["green","yellow","red","purple"].forEach(function(c,i){
-            setTimeout(function(){ fire("sim/esp32-led",{led:c}); }, i*400);
-          });
-        };
-      }
-      else { fn=function(){ fire(p.id); }; }
-      mkBtn(r,p.label||p.id,"sev-"+(p.sev||""),fn);
-      if(p.hint){ (r.lastChild as any).title=p.hint; }
-    });
-    g=group("1 · scripted tour"), r=btnRow(g);
-    mkBtn(r,"▶ "+(label["start"]||"start"),"",function(){ fire("start"); });
-    mkBtn(r,"■ "+(label["stop"]||"stop"),"",function(){ fire("stop"); });
-    mkBtn(r,"RESET","",function(){ fire("sim/global_state",{score:0}); });
-
-    g=group("2 · risk score → band + LED"); r=btnRow(g);
-    cat.score_presets.forEach(function(v){ mkBtn(r,String(v),"",function(){ fire("score",{v:v}); }); });
-
-    g=group("3 · band presets"); r=btnRow(g);
-    Object.keys(cat.band_presets).forEach(function(b){
-      mkBtn(r,b,"sev-"+b.toLowerCase(),function(){ fire("score",{v:cat.band_presets[b]}); });
-    });
-
-    g=group("4 · alerts + ACK"); r=btnRow(g);
-    cat.alert_sevs.forEach(function(sev){ mkBtn(r,"+ "+sev,"sev-"+sev,function(){ fire("alert",{v:sev}); }); });
-    cat.triggers.forEach(function(t){ if(t.group==="alert"&&t.id!=="alert"){ mkBtn(r,t.label,"",function(){ fire(t.id); }); } });
-    mkBtn(r,"ACK last alert","",ackLast);
-
-    g=group("5 · IoT devices ("+cat.devices.length+")");
-    cat.devices.forEach(function(d){
-      var row=document.createElement("div"); row.className="trow";
-      var nm=document.createElement("span"); nm.className="tname"; nm.textContent=d.name;
-      nm.title=d.kind+" · "+d.room; row.appendChild(nm);
-      cat.sevs.forEach(function(sev){
-        var b=mkBtn(row,sev,"sev sev-"+sev,function(){ fire("device",{v:d.id,s:sev}); });
-        b.title=d.name+" → "+d.states[sev];
+      var btns = document.createElement("div");
+      btns.className = "device-btns";
+      d.states.forEach(function(st) {
+        var b = document.createElement("button");
+        b.className = "btn-" + st.s;
+        b.textContent = st.l;
+        b.onclick = function() { fire("device", { v: d.id, s: st.s }); };
+        btns.appendChild(b);
       });
-      g.appendChild(row);
+      row.appendChild(btns);
+      c.appendChild(row);
     });
-
-    g=group("6 · node heartbeats"); r=btnRow(g);
-    cat.nodes.forEach(function(n){
-      mkBtn(r,n+" up","sev-green",function(){ fire("health",{v:n,s:"up"}); });
-      mkBtn(r,n+" down","sev-red",function(){ fire("health",{v:n,s:"down"}); });
-    });
-    var esp=document.createElement("span"); esp.className="ro"; esp.textContent="esp32 = real board";
-    r.appendChild(esp);
-
-    g=group("7 · IDS / network edge"); r=btnRow(g);
-    cat.triggers.forEach(function(t){ if(t.group==="edge"){ mkBtn(r,t.label,"",function(){ fire(t.id); }); } });
   }
-  function fire(id,extra){
-    if(!authed){ trigStatus(false,"sign in first"); return; }
-    var body={id:id};
-    if(extra){ for(var k in extra){ body[k]=extra[k]; } }
-    var label=id+(body.v!==undefined?" "+body.v:"")+(body.s?" "+body.s:"");
-    fetch("/debug/trigger",{method:"POST",headers:{"Content-Type":"application/json"},
-                            body:JSON.stringify(body)})
-      .then(function(r){ return r.text().then(function(t){ return {ok:r.ok,t:t}; }); })
-      .then(function(res){
-        trigStatus(res.ok, res.ok?("voidmain/sim/"+id):(res.t||"rejected"));
-        pushLog(label,res.ok);
-        // best-effort local mirror for preset triggers that change the band now.
-        if(res.ok && (id==="score" || id.indexOf("preset/")===0) && body.v!=null){
-          var b=bandFromScore(body.v); setMirrorColour(b, null);
+
+  function log(msg, ok) {
+    var b = document.getElementById("log-box");
+    var d = document.createElement("div");
+    d.className = "log-entry " + (ok === true ? "ok" : ok === false ? "err" : "");
+    var ts = new Date().toTimeString().slice(0, 8);
+    d.textContent = "[" + ts + "] " + msg;
+    b.insertBefore(d, b.firstChild);
+    if (b.children.length > 50) b.removeChild(b.lastChild);
+  }
+
+  window.fire = function(id, extra) {
+    var body = { id: id };
+    if (extra) {
+      for (var k in extra) body[k] = extra[k];
+    }
+    fetch("/debug/trigger", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    }).then(function(r) {
+      if (r.ok) {
+        log("Fired " + id + (extra && extra.v ? " (" + extra.v + ")" : ""), true);
+        document.getElementById("last-action").textContent = "Executed: " + id;
+      } else {
+        r.text().then(function(t) {
+          log("Rejected: " + id + " (" + t + ")", false);
+          if (r.status === 401) promptUnlock();
+        });
+      }
+    }).catch(function(e) {
+      log("Network error firing " + id, false);
+    });
+  };
+
+  function promptUnlock() {
+    document.getElementById("auth-status").textContent = "LOCKED — Enter code:";
+    document.getElementById("lan-code").focus();
+  }
+
+  function unlock() {
+    var code = document.getElementById("lan-code").value.trim();
+    if (!code) {
+      // Auto-unlock via skip endpoint if running on rig
+      fetch("/auth/skip", { method: "POST" }).then(function(r) {
+        if (r.ok) {
+          authed = true;
+          document.getElementById("auth-status").textContent = "UNLOCKED";
+          document.getElementById("auth-status").style.color = "var(--green)";
+          log("Session authorized (rig skip)", true);
+          connectWs();
+        } else {
+          promptUnlock();
         }
-      })
-      .catch(function(){ trigStatus(false,"server unreachable"); pushLog(id+" — unreachable",false); });
-    function bandFromScore(v){
-      v=Number(v)||0;
-      if(v>=85) return "PURPLE";
-      if(v>=60) return "RED";
-      if(v>=30) return "YELLOW";
-      return "GREEN";
-    }
-  }
-  function ackLast(){
-    if(!lastAlertId){ trigStatus(false,"no alert yet"); return; }
-    if(!ws||ws.readyState!==1){ trigStatus(false,"WS not connected"); return; }
-    ws.send(JSON.stringify({ack:lastAlertId}));
-    trigStatus(true,"ACK sent for "+lastAlertId);
-    pushLog("ACK "+lastAlertId,true);
-    // mirror clears when the alert opens are gone
-    setTimeout(function(){ if(lastAlertId && mirrorSev){ setMirrorColour(mirrorBand, null); } }, 600);
-  }
-  function boot(){
-    fetch("/auth/status",{cache:"no-store"}).then(function(r){return r.json();}).then(function(j){
-      authed=!!j.authenticated; authChip();
-      if(authed){ loadCatalogue(); connect(); } else { schedule(); }
-    }).catch(function(){ authed=false; authChip(); schedule(); });
-    $("#trig-signin").addEventListener("click",signIn);
-    $("#trig-code").addEventListener("keydown",function(e){ if(e.key==="Enter") signIn(); });
-    $("#trig-reset").addEventListener("click",function(){ fire("sim/global_state",{score:0}); });
-
-    // ---- /healthz poll ----
-    function pollHealth(){
-      fetch("/healthz",{cache:"no-store"}).then(function(r){return r.json();}).then(function(j){
-        $("#c-health").className=""; $("#c-health").textContent=JSON.stringify(j);
-      }).catch(function(){ $("#c-health").className="err"; $("#c-health").textContent="unreachable"; });
-    }
-
-    // ---- trigger console (laptop 3) ----
-    function authChip(){
-      var c=$("#auth-chip"); c.className="chip "+(authed?"live":"offline");
-      c.textContent=authed?"SESSION OK":"LOCKED";
-      $("#trig-auth").hidden=authed;
-      $("#trig-hint").textContent=authed
-        ? "Session active — buttons, WS frames and ACKs share it."
-        : "Enter the LAN access code to unlock the buttons.";
-    }
-    function trigStatus(ok,msg){
-      var el=$("#trig-status"); el.className=ok?"ok":"err";
-      el.textContent=(ok?"OK · ":"FAIL · ")+msg;
-    }
-    function pushLog(line,ok){
-      tlog.unshift(new Date().toTimeString().slice(0,8)+" "+(ok?"+ ":"x ")+line);
-      if(tlog.length>40) tlog.pop();
-      var box=$("#trig-log"); box.textContent="";
-      tlog.forEach(function(l,i){
-        var d=document.createElement("div");
-        d.className=i===0?(ok?"ok":"err"):"muted";
-        d.textContent=l; box.appendChild(d);
       });
+      return;
     }
-    function signIn(){
-      var code=$("#trig-code").value;
-      if(!code){ trigStatus(false,"enter the access code"); return; }
-      fetch("/auth/demo",{method:"POST",headers:{"Content-Type":"application/json"},
-                          body:JSON.stringify({code:code})})
-        .then(function(r){ return r.text().then(function(t){ return {ok:r.ok,t:t}; }); })
-        .then(function(res){
-          if(res.ok){
-            authed=true; authChip(); trigStatus(true,"console unlocked");
-            pushLog("signed in with LAN access code",true);
-            loadCatalogue(); connect();
-          } else { trigStatus(false,res.t||"sign-in failed"); pushLog("sign-in failed",false); }
-        })
-        .catch(function(){ trigStatus(false,"server unreachable"); });
-    }
-    function loadCatalogue(){
-      fetch("/debug/triggers",{cache:"no-store"}).then(function(r){
-        if(!r.ok) throw new Error("HTTP "+r.status);
-        return r.json();
-      }).then(function(c){ cat=c; renderTriggers(); })
-        .catch(function(e){ $("#trig-groups").textContent="catalogue unavailable ("+e.message+")"; });
-    }
+    fetch("/auth/demo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: code })
+    }).then(function(r) {
+      if (r.ok) {
+        authed = true;
+        document.getElementById("auth-status").textContent = "UNLOCKED";
+        document.getElementById("auth-status").style.color = "var(--green)";
+        log("Session unlocked with LAN code", true);
+        connectWs();
+      } else {
+        log("Invalid LAN access code", false);
+      }
+    }).catch(function() {
+      log("Auth endpoint unreachable", false);
+    });
+  }
 
-    // ---- AI console (laptop 3, session-gated) ----
-    var aiBusy=false;
-    function aiStatus(text,cls){
-      $("#ai-block").className = cls||"muted"; $("#ai-block").textContent=text;
-    }
-    function aiPoll(){
-      fetch("/ai/models",{cache:"no-store"}).then(function(r){ return r.json(); })
-        .then(function(j){
-          if(!j || !j.enabled){ aiStatus("assistant disabled on this server (VOIDMAIN_AI=0)","muted"); return; }
-          var dot = j.active ? "<span class=\"ok\">●</span> active" : "<span class=\"err\">●</span> model not loaded";
-          aiStatus(j.model+" · "+dot,"ok");
-        }).catch(function(){ aiStatus("assistant health check failed","err"); });
-    }
-    function askAI(q){
-      if(aiBusy){ aiStatus("already asking — wait for the reply","warn"); return; }
-      if(!authed && !ws){ aiStatus("sign in to use the assistant","err"); return; }
-      aiBusy=true; aiStatus("asking "+q+" …","warn");
-      fetch("/ai/ask",{method:"POST",headers:{"Content-Type":"application/json"},
-                        body:JSON.stringify({q:q})})
-        .then(function(r){ return r.json(); })
-        .then(function(j){
-          if(!j){ aiStatus("assistant returned nothing","err"); aiBusy=false; return; }
-          var lines=[];
-          lines.push("<b>"+(j.mode||"unknown")+"</b>");
-          if(j.answer) lines.push(j.answer.replace(/\n/g,"<br>"));
-          if(j.sources && j.sources.length){
-            var src="sources: "+(j.sources.slice(0,5).map(function(s){ return s.source||"?"; }).join(", "));
-            lines.push("<span class=\"muted\">"+src+"</span>");
+  function updateScore(score) {
+    var el = document.getElementById("tel-score");
+    el.textContent = score;
+    var bEl = document.getElementById("tel-band");
+    var band = score >= 85 ? "PURPLE" : score >= 60 ? "RED" : score >= 30 ? "YELLOW" : "GREEN";
+    bEl.textContent = band;
+
+    var cls = "metric-val " + (band === "PURPLE" ? "val-purple" : band === "RED" ? "val-red" : band === "YELLOW" ? "val-yellow" : "val-green");
+    el.className = cls;
+    bEl.className = cls;
+  }
+
+  function connectWs() {
+    if (ws && (ws.readyState === 0 || ws.readyState === 1)) return;
+    var proto = location.protocol === "https:" ? "wss:" : "ws:";
+    ws = new WebSocket(proto + "//" + location.host + "/ws");
+    var badge = document.getElementById("conn-badge");
+
+    ws.onopen = function() {
+      badge.className = "badge live";
+      badge.textContent = "LIVE";
+      log("WebSocket connected to bus", true);
+    };
+
+    ws.onclose = function() {
+      badge.className = "badge offline";
+      badge.textContent = "OFFLINE";
+      setTimeout(connectWs, 2000);
+    };
+
+    ws.onerror = function() {
+      badge.className = "badge offline";
+      badge.textContent = "OFFLINE";
+    };
+
+    ws.onmessage = function(ev) {
+      try {
+        var msg = JSON.parse(ev.data);
+        if (msg.t === "score") {
+          updateScore(msg.d.v);
+        } else if (msg.t === "band") {
+          var bEl = document.getElementById("tel-band");
+          bEl.textContent = msg.d.b;
+          var cls = "metric-val " + (msg.d.b === "PURPLE" ? "val-purple" : msg.d.b === "RED" ? "val-red" : msg.d.b === "YELLOW" ? "val-yellow" : "val-green");
+          bEl.className = cls;
+        } else if (msg.t === "alert") {
+          lastAlertId = msg.d.id;
+          document.getElementById("tel-alerts").textContent = msg.d.title || "Alert active";
+          log("Alert: " + (msg.d.title || msg.d.id), msg.d.sev !== "green");
+        } else if (msg.t === "health") {
+          var nid = msg.d.node;
+          var el = document.getElementById("node-" + nid);
+          if (el) {
+            el.className = "node-chip node-up";
+            el.textContent = nid.toUpperCase() + " · UP";
           }
-          var html=lines.join("<br>");
-          aiStatus(html, j.mode==="model"?"ok":"warn");
-          aiBusy=false;
-        })
-        .catch(function(){ aiStatus("assistant unreachable","err"); aiBusy=false; });
-    }
-
-    // ---- AI console UI ----
-    $("#ai-ask").addEventListener("click",function(){
-      var q=$("#ai-prompt").value;
-      if(!q){ aiStatus("type a question first","err"); return; }
-      askAI(q);
-    });
-    $("#ai-prompt").addEventListener("keydown",function(e){
-      if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); $("#ai-ask").click(); }
-    });
-    aiPoll();
-    setInterval(aiPoll,15000);
-
-  // ---- websocket (session-gated) ----
-  function setConn(){ var c=$("#conn"); var st=connected?(Date.now()-lastMsg>5000?"stale":"live"):"offline"; c.className="chip "+st; c.textContent=st.toUpperCase(); }
-  function connect(){
-    try{ ws=new WebSocket((location.protocol==="https:"?"wss://":"ws://")+location.host+"/ws"); }
-    catch(e){ schedule(); return; }
-    ws.addEventListener("open",function(){ connected=true; backoff=1; lastMsg=Date.now(); setConn(); ping(); });
-    ws.addEventListener("message",function(ev){
-      lastMsg=Date.now();
-      var m; try{ m=JSON.parse(ev.data); }catch(e){ return; }
-      if(m && m.ctl==="pong"){ onPong(m); return; }
-      if(m && typeof m.t==="string" && !paused){
-        onFrame(m, ev.data);
-        // mirror the bus colour to the strip + FPGA/tinysim indicator
-        var band=m.t==="band"&&m.d&&m.d.b?m.d.b:null;
-        var sev=m.t==="alert"&&m.d&&m.d.sev?m.d.sev
-                :m.t==="device"&&m.d&&m.d.sev?m.d.sev:null;
-        if(band || sev){ setMirrorColour(band, sev); }
-      }
-      setConn();
-    });
-    ws.addEventListener("close",function(){ connected=false; reconnects+=1; setConn(); schedule(); });
-    ws.addEventListener("error",function(){ try{ws.close();}catch(e){} });
-
-    // ---- AI console UI ----
-    $("#ai-ask").addEventListener("click",function(){
-      var q=$("#ai-prompt").value;
-      if(!q){ aiStatus("type a question first","err"); return; }
-      askAI(q);
-    });
-    $("#ai-prompt").addEventListener("keydown",function(e){
-      if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); $("#ai-ask").click(); }
-    });
-    aiPoll();
-    setInterval(aiPoll,15000);
+        }
+      } catch (err) {}
+    };
   }
-  function schedule(){ setTimeout(function(){ if(authed) connect(); else boot(); },backoff*1000); backoff=Math.min(backoff*2,5); }
 
-  // ---- timers ----
-  setInterval(ping,3000);                 // clock sync
-  setInterval(function(){ TYPES.forEach(function(t){rateShown[t]=rateCount[t];rateCount[t]=0;}); },1000); // rates/sec
-  setInterval(function(){ renderPanels(); renderLog(); },400);  // throttled UI
-  setInterval(setConn,1000);
-  setInterval(pollHealth,5000); pollHealth();
+  // Bind top presets
+  document.getElementById("trig-full").onclick = function() { fire("preset/full-tour"); };
+  document.getElementById("trig-hold").onclick = function() { fire("stop"); log("SIMULATION PAUSED / HELD", true); };
+  document.getElementById("trig-resume").onclick = function() { fire("start"); log("SIMULATION RESUMED", true); };
+  document.getElementById("trig-green").onclick = function() { fire("preset/green-warm"); };
+  document.getElementById("trig-yellow").onclick = function() { fire("preset/yellow-motion"); };
+  document.getElementById("trig-red").onclick = function() { fire("preset/red-intrusion"); };
+  document.getElementById("trig-purple").onclick = function() { fire("preset/purple-automation"); };
+  document.getElementById("trig-ack").onclick = function() {
+    if (lastAlertId && ws && ws.readyState === 1) {
+      ws.send(JSON.stringify({ ack: lastAlertId }));
+      log("ACK sent for " + lastAlertId, true);
+    } else {
+      fire("preset/ack-story");
+    }
+  };
 
-  boot();
+  document.getElementById("btn-unlock").onclick = unlock;
+  document.getElementById("lan-code").onkeydown = function(e) { if (e.key === "Enter") unlock(); };
+
+  // Init
+  renderDevices();
+  unlock(); // Auto attempt session unlock on load
 })();
 </script>
 </body>

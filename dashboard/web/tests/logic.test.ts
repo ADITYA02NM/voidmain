@@ -95,6 +95,15 @@ describe("store.applyBatch", () => {
     expect(s.getState().layers.idsCount).toBe(1);
     expect(s.getState().layers.wifiRogue).toBe(true);
   });
+  // ESP32 sync contract: the board's voidmain/health/esp32 heartbeat must land
+  // on the esp32 node tile (NodeTiles renders it only when lastSeen is fresh).
+  it("marks the esp32 node up from the board's health heartbeat", () => {
+    const s = new Store();
+    s.applyBatch([env("health", { node: "esp32", up: 128, services: ["ok"] })]);
+    const n = s.getState().nodes["esp32"];
+    expect(n?.up).toBe(128);
+    expect(Date.now() - n!.lastSeen).toBeLessThan(2000);
+  });
 });
 
 describe("filterHistory", () => {

@@ -92,3 +92,23 @@ async def record(path: Path, mapped: dict[str, Any] | None) -> None:
                 int(d["ack_ts"]) if d.get("ack_ts") else None,
             ),
         )
+    elif t == "device":
+        # IoT device frame (campfire, air-purifier, door-front, camera-front,
+        # perimeter, and the ESP32 LED mirror) — stored as an alert-style row
+        # so /alerts and the dashboard replay it on join.
+        did = str(d.get("id") or "")[:128]
+        if did:
+            await _write(
+                path,
+                "INSERT OR REPLACE INTO alerts "
+                "(id, ts, sev, title, src, body, ack, ack_ts) VALUES (?, ?, ?, ?, ?, ?, 1, ?)",
+                (
+                    f"dev-{did}-{int(d.get('ts') or time.time())}",
+                    int(d.get("ts") or time.time()),
+                    str(d.get("sev") or "green"),
+                    str(d.get("name") or did)[:200],
+                    f"iot/{did}",
+                    f"Device state: {str(d.get('state') or '—')}",
+                    int(d.get("ts") or time.time()),
+                ),
+            )

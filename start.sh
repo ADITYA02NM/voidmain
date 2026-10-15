@@ -48,7 +48,7 @@ if [ ! -f "$DASHBOARD/web/dist/index.html" ]; then
     || echo "  ! build failed — laptop 2/3 will 404 (run: cd web && npm run build)"
 fi
 
-echo "[3/5] Backend (port 8081)..."
+echo "[3/5] Backend (port 8080)..."
 pkill -f "server.main" 2>/dev/null || true
 sleep 0.5
 cd "$DASHBOARD"

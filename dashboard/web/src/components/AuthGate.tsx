@@ -4,15 +4,40 @@ import { store } from "../store/store";
 import { HardwareTwin } from "./HardwareTwin";
 import {
   checkAuth, setupBegin, setupComplete,
-  loginBegin, loginComplete,
+  loginBegin, loginComplete, demoLogin, skipRegistration,
 } from "../lib/auth";
 
 // Static facts only: nothing on the lock screen may reflect live data before auth.
 const TRUST = ["Zero cloud", "Owner-only passkey", "~$290 · ~38 W", "Event → screen < 100 ms", "Phase 1: notify-only"];
 
 function AuthLayout({ children }: { children: React.ReactNode }) {
+  const [skipBusy, setSkipBusy] = useState(false);
+
+  async function handleSkip() {
+    if (skipBusy) return;
+    setSkipBusy(true);
+    try {
+      await skipRegistration();
+    } catch (e) {
+      console.warn("Skip registration backend call failed, falling back to demo state:", e);
+    } finally {
+      store.setAuth(true, true);
+      setSkipBusy(false);
+    }
+  }
+
   return (
     <main className="auth-screen">
+      <button
+        className="auth-skip-corner"
+        onClick={handleSkip}
+        disabled={skipBusy}
+        type="button"
+        aria-label="Skip registration"
+        title="Skip registration"
+      >
+        {skipBusy ? "…" : "skip"}
+      </button>
       <section className="auth-hero">
         <h1 className="auth-logo">Void<b>Main</b></h1>
         <p className="auth-subtitle">Detect → govern → alert for the smart-home IoT layer. Zero cloud.</p>
@@ -71,6 +96,8 @@ function SetupScreen() {
 function LoginScreen() {
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
+  const [code, setCode] = useState("");
+  const [codeBusy, setCodeBusy] = useState(false);
 
   async function handleLogin() {
     setBusy(true);
@@ -89,12 +116,43 @@ function LoginScreen() {
     }
   }
 
+  async function handleDemo() {
+    if (!code.trim()) { setStatus("Enter the LAN access code"); return; }
+    setCodeBusy(true);
+    setStatus("Checking access code…");
+    try {
+      await demoLogin(code.trim());
+      store.setAuth(true, true);
+      setStatus("");
+    } catch (e: any) {
+      setStatus(e.message || "Access code rejected");
+    } finally {
+      setCodeBusy(false);
+    }
+  }
+
   return (
     <AuthLayout>
       <button className="auth-btn" onClick={handleLogin} disabled={busy} autoFocus>
         Unlock with passkey
       </button>
       {status && <div className="auth-status" role="status">{status}</div>}
+      <div className="auth-demo">
+        <span className="auth-hint">Demo rig on the LAN?</span>
+        <input
+          className="auth-code"
+          type="password"
+          value={code}
+          placeholder="access code"
+          autoComplete="off"
+          aria-label="LAN demo access code"
+          onChange={(e) => setCode(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") handleDemo(); }}
+        />
+        <button className="auth-btn auth-btn-ghost" onClick={handleDemo} disabled={codeBusy}>
+          Unlock
+        </button>
+      </div>
     </AuthLayout>
   );
 }
@@ -107,7 +165,7 @@ function CheckingScreen() {
   );
 }
 
-export function AuthGate({ children }: { children: React.ReactNode }) {
+export function AuthGate({ children }: { children?: React.ReactNode }) {
   const phase = useStore((s) => s.authPhase);
 
   useEffect(() => {

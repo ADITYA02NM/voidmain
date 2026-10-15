@@ -6,7 +6,8 @@ export interface AuthStatus {
 }
 
 export async function checkAuth(): Promise<AuthStatus> {
-  const r = await fetch("/auth/status");
+  const r = await fetch("/auth/status", { cache: "no-store" });
+  if (!r.ok) return { has_owner: false, authenticated: false };
   return r.json();
 }
 
@@ -81,6 +82,25 @@ export async function loginComplete(credential: Credential): Promise<void> {
 export async function logout(): Promise<void> {
   await fetch("/auth/logout", { method: "POST" });
   store.setAuth(false, true);
+}
+
+// LAN demo rig: passkeys are pinned to rp_id, so the other laptops unlock with
+// the one-time code printed by start.sh (POST /auth/demo -> session cookie).
+export async function demoLogin(code: string): Promise<void> {
+  const r = await fetch("/auth/demo", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+  if (!r.ok) throw new Error((await r.text()) || "Access code rejected");
+}
+
+export async function skipRegistration(): Promise<void> {
+  const r = await fetch("/auth/skip", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!r.ok) throw new Error((await r.text()) || "Skip registration failed");
 }
 
 function bufToB64(buf: ArrayBuffer): string {
