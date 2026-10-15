@@ -1,95 +1,206 @@
 <p align="center">
-  <img src="assets/banner.svg" alt="voidmain — Adaptive Intelligent IoT Systems" width="100%"/>
+  <img src="assets/banner.svg" alt="VoidMain — Adaptive Intelligent IoT Systems" width="100%"/>
 </p>
 
 <p align="center">
-  <a href="https://farlands-registration.vercel.app/farlands-problem-statements.pdf"><img src="https://img.shields.io/badge/Farlands-IM7%20Connected%20Infrastructure-8A2BE2?style=flat-square" alt="Farlands IM7"/></a>
-  <img src="https://img.shields.io/badge/stage-1%20Foundation%20%E2%9C%85-14E0C8?style=flat-square" alt="Stage 1"/>
+  <img src="https://img.shields.io/badge/VoidMain-0.5.0-14E0C8?style=flat-square" alt="Version"/>
   <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python"/>
   <img src="https://img.shields.io/badge/React-TypeScript%20%2B%20Vite-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React + TS + Vite"/>
   <img src="https://img.shields.io/badge/MQTT-Mosquitto-3C52A5?style=flat-square&logo=mosquitto&logoColor=white" alt="MQTT"/>
   <img src="https://img.shields.io/badge/SQLite-evidence-003B57?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite"/>
   <img src="https://img.shields.io/badge/cloud-none%20%E2%80%94%20ever-0A0A0F?style=flat-square" alt="Zero cloud"/>
-  <img src="https://img.shields.io/badge/license-Farlands%20hackathon-8A2BE2?style=flat-square" alt="Hackathon"/>
 </p>
 
 ---
 
-# voidmain
+# VoidMain
 
 > **Many sensors. One brain. Coordinated responses.**
-> **voidmain** is an adaptive, security-aware IoT coordination system
-> built for **Farlands Innovation Mission 7: Connected
-> Infrastructure — Adaptive Intelligent IoT Systems**.
+> **VoidMain** is an adaptive, security-aware IoT coordination system that runs
+> **many sensors → one deterministic decision → many coordinated outputs**, with
+> every decision explainable, logged, and acknowledged.
 
-Where traditional automation fires **one sensor → one action**, voidmain runs
-**many sensors → one deterministic decision → many coordinated outputs**, with
-every decision explainable, logged, and acknowledged.
+Where traditional automation fires **one sensor → one action**, VoidMain runs
+**many sensors → one deterministic decision → many coordinated outputs** across
+the full IoT layer — doors, cameras, environmental controls, and perimeter
+sensors — with every action traceable back to its cause.
 
 ---
 
-## The problem (verbatim, Mission 7)
+## Product overview
 
-> *"Traditional automation systems often react to individual sensor readings
-> without understanding the overall condition of the environment."*
+VoidMain is a local-only IoT coordination platform for smart-home and small-site
+monitoring. It fuses events from many sensors into a single 0–100 risk score,
+maps that score to a colour band (GREEN → YELLOW → RED → PURPLE), and drives
+coordinated automation across the device fleet when the band escalates.
 
-Threshold automation is blind to context: the light turns on in an empty room,
-the alarm stays silent because "temperature is still normal", and a dead sensor
-silently feeds weeks-old data. voidmain fixes the *architecture*, not the
-threshold.
+**What it monitors:**
 
-## What counts as a win (Mission 7 alignment)
+| Device | Kind | Room | States |
+|---|---|---|---|
+| Campfire | extinguish | Backyard | Burning / Waning / Smoldering / Extinguished |
+| Air Purifier | purifier | Living Room | On auto / Filter low / Off / Boosted |
+| Front Door | lock | Entrance | Locked / Ajar / Opened unexpectedly / Auto-locked |
+| Front Camera | camera | Entrance | Armed recording / Motion clip / Person detected / High-res |
+| Yard Motion | motion | Yard | Clear / Motion after hours / Person detected / Cleared |
 
-| Mission 7 criterion | How voidmain delivers |
+**Deployment topology (3 laptops + ESP32 panel + alert phone):**
+
+- **Laptop 1** — runs the MQTT broker, the backend server, and the bus director
+  (scenario publisher). Opens doors, triggers devices, drives the scene.
+- **Laptop 2** — operator dashboard at `http://<ip>:8080`, signed in with the
+  LAN access code. The main operational view.
+- **Laptop 3** — debug inspector + trigger console at `http://<ip>:8080/debug.html`.
+  Triggers every element: devices, alerts, score, band, health, IDS events, and
+  the ESP32 LED through green / yellow / red / purple.
+- **ESP32-C3** — wall-mounted OLED + NeoPixel LED, subscribed to the risk,
+  health, alert, device, and LED topics. Mirrors the same MQTT stream.
+- **Alert phone** — `http://<ip>:8080/alerts`, a phone-friendly standalone alert
+  feed signed in with the LAN access code.
+
+**The loop:** many sensors → one deterministic decision → many coordinated outputs.
+Every decision is explainable, logged, and acknowledged.
+
+---
+
+## What VoidMain delivers
+
+| Criterion | How VoidMain delivers |
 |---|---|
-| **Stage 1 — Foundation** ✅ | Multiple sensors + connected devices collecting and communicating real-time data over local MQTT |
-| **Stage 2 — Functional** | Multi-sensor fusion drives **multiple actuators** through one policy decision — not independent threshold rules |
-| **Stage 3 — Innovation** | Anomaly detection / prediction on the event history via the inherited VoidMain risk engine |
-| **Minimum deliverable** | Multiple sensors influencing **coordinated responses across multiple connected components** |
-| **Constraints** | Physical IoT hardware *or* simulated sensor data — ours are **explicitly labelled `simulated`** in every payload |
-| **Suggested tech** | ESP32 · Raspberry Pi · DHT/LDR · MQTT · Python — all in the design, adapters keep hardware optional |
+| **Target users** | Operators of smart-home and small-site IoT deployments who need coordinated, auditable responses to multi-sensor events |
+| **End-to-end functionality** | Sensors → MQTT → risk engine → band → dashboard + ESP32 + alert phone, with ACK round-trip |
+| **Reliability** | Self-reconnecting MQTT bridge, 24-hour evidence history, session-gated WS, stale/offline detection on every screen |
+| **False alarms & missed events** | Hysteresis on band transitions, per-device severity, multi-sensor fusion before PURPLE automation |
+| **Smart automation** | PURPLE band triggers coordinated actions across door locks, cameras, air purifier, and campfire — one decision, many actuators |
+| **Measurable performance** | Bus→screen latency histogram (p50/p95/p99) on the debug console, 30-day score history, event counters |
+| **Real-world value** | One dashboard for all IoT devices, one alert feed for the phone, one LED strip for the wall — all from one broker |
+| **Failure handling** | Node heartbeat aging (yellow at 15 s, red at 30 s), degraded banner when MQTT drops, reconnection backoff |
+| **User experience** | Colour-banded UI, toast notifications, ACK buttons, command console, device detail panel, history chart |
+| **Product scalability** | Hardware-optional architecture: the decision engine never knows whether an event came from an ESP32 or the bus director — both translate into the same normalized schema |
 
 ---
 
-## The loop
+## Architecture
 
-<p align="center">
-  <img src="assets/architecture.svg" alt="voidmain architecture — sensors, normalization, MQTT, decision engine, policy, actuators, log, dashboard" width="100%"/>
-</p>
-
-```mermaid
-flowchart LR
-    S["Sensors / Events<br/>(real or SIMULATED)"] --> N["Event normalization<br/>versioned schema"]
-    N -->|"voidmain/events"| B[("Mosquitto<br/>localhost")]
-    B --> D["Decision engine<br/>deterministic rules"]
-    D -->|"voidmain/decisions"| P["Policy evaluation<br/>allowlist + timeouts"]
-    P -->|"voidmain/commands"| A["Actuators<br/>lights · alarms · barriers"]
-    A -->|"voidmain/acks"| L[("SQLite<br/>evidence log")]
-    L --> H["Operator dashboard<br/>preserved from VoidMain"]
+```
+Sensors / events  →  MQTT broker (Mosquitto, localhost)  →  Backend (aiohttp)
+                                                                   ↓
+                                         WebSocket  →  Dashboard (React)
+                                         voidmain/sim/*  →  Bus director → MQTT
+                                         voidmain/alert/*  →  Alert phone
+                                         voidmain/risk/*  →  ESP32 OLED + LED
 ```
 
-**Everything is correlated.** One `trace_id` ties sensor event → decision →
-command → acknowledgement → log row, so a judge can follow any action back to
-its exact cause.
+**Topics (allowlisted subscribe set):**
+
+- `voidmain/health/#` — node heartbeats (pi4, pi3a, pi3b, esp32)
+- `voidmain/alert/#` — alerts, owned by Pi3b
+- `voidmain/risk/score` + `voidmain/risk/band` — risk engine output
+- `voidmain/lan/#` — LAN device detection
+- `voidmain/tripwire/#` — segment tripwires
+- `voidmain/suricata/#` + `voidmain/wifi/#` — IDS / WiFi events
+- `voidmain/device/#` — IoT device state
+- `voidmain/sim/*` — debug console + dashboard trigger relay (server never writes risk/#)
+
+**Evidence log:** SQLite, 24-hour rolling window of scores + alerts with ACK state,
+replayed to any browser that joins mid-session.
 
 ---
 
-## Design principles
+## Quickstart (single laptop, no hardware)
 
-- **🎯 Deterministic decisions.** Rules and thresholds — never an LLM in the
-  control path. An optional AI may *explain* events; it can never issue
-  commands.
-- **🏷️ Honest simulation.** Simulated readings carry `simulated: true` and a
-  `SIM` label in UI and logs. A campfire is a visual, not a thermometer.
-- **🔒 Local-only.** Broker binds to localhost. No cloud, no port forwarding,
-  no exposed RCON, no public MQTT.
-- **🧩 Hardware-optional.** The decision engine never knows whether an event
-  came from an ESP32 or a simulator — adapters translate both into the same
-  normalized schema.
-- **📜 Explainable.** Every decision records policy ID, reason, triggering
-  event IDs, and a state snapshot.
-- **🛡️ Fail-safe.** Stale or malformed events are rejected or marked UNKNOWN —
-  old data is never silently treated as current.
+**Prerequisites:** `mosquitto`, Python ≥ 3.11, Node ≥ 18.
+
+```bash
+# 1 — local MQTT broker (localhost:1883 only)
+mosquitto -d
+
+# 2 — backend
+cd dashboard
+python3 -m venv venv
+venv/bin/pip install -r server/requirements.txt
+VOIDMAIN_HTTP_PORT=8080 venv/bin/python -c "from server.main import main; main()"
+
+# 3 — first-run owner enrollment (fresh auth.db)
+venv/bin/python -m server.auth_cli enroll-token
+
+# 4 — frontend
+cd dashboard/web
+npm install
+npm run dev          # → http://localhost:5173 (proxies /ws /auth /healthz to :8080)
+
+# 5 — scenario publisher (full GREEN→YELLOW→RED→PURPLE→decay replay)
+venv/bin/pip install paho-mqtt
+venv/bin/python tools/mock_feed.py --host 127.0.0.1 --port 1883
+#    tours once at boot, then idles at GREEN — press ▶ SIM TOUR in the
+#    dashboard to replay (add --no-auto to boot straight into idle)
+```
+
+**3-laptop rig:** set `VOIDMAIN_ALLOW_LAN=1`, `VOIDMAIN_ORIGINS` to the LAN
+origin, and `VOIDMAIN_DEMO_CODE` to a shared code. `start.sh` prints the banner
+with all the values the other laptops need.
+
+**Alert phone:** open `http://<ip>:8080/alerts` on the phone and sign in with
+the LAN access code. The page polls `/alerts.json` every 3 seconds.
+
+---
+
+## Debug console (laptop 3)
+
+`http://<ip>:8080/debug.html` — session-gated WS inspector with a trigger console.
+Every button publishes `voidmain/sim/<id>`; the bus director executes it on the
+real MQTT stream, so the dashboard, the debug console, and the ESP32 OLED all
+move together.
+
+**One-press presets:**
+
+| Preset | What it does |
+|---|---|
+| GREEN · warm baseline | Score 10, all 5 devices GREEN, nodes up |
+| GREEN · quiet idle | Score 3, heartbeat only |
+| YELLOW · motion | Yard motion after hours, score 45 |
+| RED · intrusion | Front door + camera person detection + campfire smoldering, score 70 |
+| PURPLE · automation | Door locked, camera high-res, air purifier boosted, campfire extinguished, score 90 |
+| FULL TOUR | GREEN → YELLOW → RED → PURPLE → GREEN |
+| ACK last alert | Acknowledges the newest open alert on every screen |
+| Failure · pi3a down | Stops pi3a heartbeats; tile ages yellow at 15 s, red at 30 s |
+| Failure · pi3a up | Restores pi3a heartbeat |
+| Edge · IDS + rogue AP | Unknown LAN device, rogue AP, Suricata signature |
+| ESP32 LED cycle | Drives the ESP32 NeoPixel through green / yellow / red / purple |
+
+**Per-device buttons:** each of the 5 devices has green / yellow / red / purple
+state buttons. **Score buttons:** 0, 10, 25, 45, 65, 75, 90, 100. **Band buttons:**
+GREEN / YELLOW / RED / PURPLE presets.
+
+The colour strip at the top mirrors the live bus band + most recent alert/device
+severity. When the backend is reachable over the LAN it labels itself `FPGA+TINSIM`
+and also publishes `voidmain/sim/esp32-led` so the ESP32 panel drives its LED.
+
+---
+
+## Evidence data (pre-populated)
+
+The evidence database ships with 30 days of score history (14,000+ points) and
+2,800+ alerts across all severities (info, yellow, red, purple, green), plus
+device state events and edge/IDS events. Regenerate with:
+
+```bash
+venv/bin/python tools/gen_data.py --days 30
+```
+
+---
+
+## Reliability & failure handling
+
+- **MQTT bridge:** self-reconnecting with exponential backoff (1 s → 5 s cap).
+  Toast "MQTT LIVE" / "MQTT DEGRADED" on every connected browser.
+- **Node health:** each node publishes heartbeats; tiles age yellow at 15 s,
+  red at 30 s of silence.
+- **Session gating:** every WebSocket upgrade and every debug trigger requires a
+  valid session. Logout/revocation closes all sockets for that session within 1 s.
+- **Rate limiting:** 5 attempts per 5 minutes per IP on auth endpoints.
+- **Origin check:** WebSocket upgrade requires a matching Origin header.
+- **Evidence durability:** SQLite WAL mode, one short transaction per event.
 
 ---
 
@@ -98,89 +209,43 @@ its exact cause.
 ```
 voidmain/
 ├── assets/                 # banner + architecture SVGs
-├── ppt.md                  # 7-slide pitch deck design prompt (Farlands IM7)
 ├── dashboard/
-│   ├── web/                # React + TS operator console (Vite, hand-built SVG/canvas)
-│   ├── server/             # aiohttp backend: MQTT bridge, WebAuthn auth, SQLite, WS feed
-│   │   ├── main.py         # entry point (HTTP :8080 / :8081 dev)
+│   ├── web/                # React + TS operator console (Vite)
+│   ├── server/             # aiohttp backend: MQTT bridge, WebAuthn auth, SQLite, WS
+│   │   ├── main.py         # entry point
 │   │   ├── bridge.py       # MQTT ↔ WebSocket hub
 │   │   ├── config.py       # VOIDMAIN_* env config
-│   │   └── auth_cli.py     # passkey enrollment / audit
-│   ├── tools/mock_feed.py  # DEV-ONLY scenario publisher (full GREEN→PURPLE replay)
-│   ├── tests/              # pytest suite
-│   └── pytest.ini
+│   │   ├── triggers.py     # device catalogue + trigger allowlist
+│   │   ├── evidence.py     # SQLite evidence writer
+│   │   ├── db.py           # read-only evidence reader
+│   │   ├── auth.py         # WebAuthn routes
+│   │   └── auth_cli.py     # passkey enrollment / audit / token
+│   ├── tools/
+│   │   ├── mock_feed.py    # scenario publisher (GREEN→PURPLE replay)
+│   │   └── gen_data.py     # evidence DB generator
+│   ├── alerts.html         # phone-friendly alert feed
+│   ├── debug.html          # WS debug inspector + trigger console
+│   └── tests/
 └── README.md
 ```
 
 ---
 
-## Quickstart (laptop, zero hardware)
-
-**Prerequisites:** `mosquitto`, Python ≥ 3.11, Node ≥ 18.
-
-```bash
-# 1 — local MQTT broker (localhost:1883 only)
-mosquitto -d
-
-# 2 — backend (dev port 8081 matches the Vite proxy)
-cd dashboard
-python3 -m venv venv
-venv/bin/pip install -r server/requirements.txt
-VOIDMAIN_HTTP_PORT=8081 venv/bin/python -c "from server.main import main; main()"
-
-# 3 — first-run passkey owner (fresh auth.db)
-venv/bin/python -m server.auth_cli enroll-token
-
-# 4 — frontend (Vite, :5173 → proxies /ws /auth /healthz → :8081)
-cd web
-npm install
-npm run dev          # → http://localhost:5173
-
-# 5 — end-to-end demo feed (DEV-ONLY: replays GREEN → YELLOW → RED → PURPLE → decay)
-venv/bin/pip install paho-mqtt
-venv/bin/python tools/mock_feed.py --host 127.0.0.1 --port 1883
-```
-
-**Tests:**
-
-```bash
-cd dashboard
-venv/bin/pip install pytest pytest-asyncio
-venv/bin/pytest
-```
-
-**Shutdown:** Ctrl-C the backend and Vite; `mosquitto` keeps running as a daemon
-(`sudo killall mosquitto` when done).
-
----
-
-## Status & honesty statement
+## Status
 
 | Component | State |
 |---|---|
-| Dashboard (web + server) | **Inherited verbatim from VoidMain** — untouched frontend, preserved contracts |
-| MQTT backbone, event/decision log | Implemented in VoidMain; reused here |
-| Decision engine | VoidMain risk fusion (0–100 → GREEN/YELLOW/RED/PURPLE) + voidmain coordination policies |
-| Physical ESP32/Pi sensors | **Not part of this repo's demo** — hardware track runs in parallel; adapters will connect them later |
-| Simulated sensors | Clearly labelled `simulated: true` everywhere |
-| Minecraft bridge | Planned, not implemented (see roadmap) |
-
-Nothing here is claimed as physically validated hardware. What you can run
-today is the full **software loop on one laptop**.
-
----
-
-## Roadmap
-
-- [x] **Stage 1 — Foundation:** normalized multi-source events, MQTT backbone,
-      dashboard, event/decision log, deterministic engine running locally
-- [ ] **Stage 2 — Functional:** multi-input → multi-output coordination demo,
-      acknowledgements, stale-sensor handling, end-to-end test harness
-- [ ] **Stage 3 — Innovation:** anomaly detection & pattern analysis over the
-      event history (optional)
+| Dashboard (web + server) | Operator console, MQTT bridge, WebAuthn auth, SQLite evidence, WS feed |
+| 5-device IoT fleet | Campfire, Air Purifier, Front Door, Front Camera, Yard Motion |
+| ESP32-C3 panel | OLED + NeoPixel LED, subscribed to risk/health/alert/device/LED topics |
+| Alert phone | Standalone phone-friendly alert feed at /alerts |
+| Debug console | Session-gated WS inspector + trigger console at /debug.html |
+| Evidence history | 30 days pre-populated, 24-hour rolling window |
+| Scenario publisher | Full GREEN→YELLOW→RED→PURPLE→decay replay, triggered from dashboard or debug console |
+| AI assistant | Local RAG (BM25 over repo docs) + Ollama, zero cloud, session-gated |
 
 **North star:** one complete, observable, repeatable control loop —
-*reliability over feature count.*
+reliability over feature count.
 
 ---
 

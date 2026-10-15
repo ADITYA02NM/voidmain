@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>VoidMain — Alerts</title>
+<style>
+:root{
+  --bg:#100e0c;--panel:#1a1714;--panel2:#14120f;--border:#2a2420;--border2:#352e28;
+  --text:#ddd4c8;--muted:#9a8e80;--muted2:#6e6050;
+  --green:#3ac870;--yellow:#d4b030;--red:#d04838;--purple:#a060d0;
+  --green-tint:rgba(58,200,112,.08);--red-tint:rgba(208,72,56,.10);--yellow-tint:rgba(212,176,48,.08);--purple-tint:rgba(160,96,208,.08);
+  --serif:"Newsreader","Times New Roman",serif;
+  --sans:"Schibsted Grotesk",Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+  --radius:4px;
+}
+*{box-sizing:border-box}
+::selection{background:rgba(160,96,208,.25)}
+:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--mono);font-size:14px;line-height:1.5;padding:12px;-webkit-font-smoothing:antialiased;min-height:100vh}
+h1{font-family:var(--serif);font-weight:400;font-size:18px;margin:0 0 4px;letter-spacing:.12em}
+h1 b{color:var(--green);font-weight:700}
+h1 span{font-family:var(--sans);font-size:10px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;margin-left:8px}
+h2{font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+.topbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 12px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.chip{padding:4px 8px;border:1px solid var(--border2);border-radius:var(--radius);font-family:var(--sans);font-size:10px;font-weight:600;letter-spacing:.08em}
+.chip.live{color:var(--green);border-color:var(--green)}
+.chip.stale{color:var(--yellow);border-color:var(--yellow)}
+.chip.offline{color:var(--red);border-color:var(--red)}
+.empty-state{text-align:center;padding:40px 16px;color:var(--muted);font-family:var(--serif);font-style:italic}
+.alert{border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;background:var(--panel)}
+.alert .bar{display:block;width:3px;height:100%;border-radius:2px;margin:-10px -12px 0 -12px}
+.alert.sev-info{background:rgba(58,200,112,.06)}
+.alert.sev-info .bar{background:var(--green)}
+.alert.sev-yellow{background:rgba(212,176,48,.08)}
+.alert.sev-yellow .bar{background:var(--yellow)}
+.alert.sev-red{background:rgba(208,72,56,.10)}
+.alert.sev-red .bar{background:var(--red)}
+.alert.sev-purple{background:rgba(160,96,208,.08)}
+.alert.sev-purple .bar{background:var(--purple)}
+.alert .head{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;margin-bottom:4px}
+.alert .ttl{font-weight:600;font-size:13px}
+.alert .src{font-size:10px;color:var(--muted);font-family:var(--mono);letter-spacing:.04em}
+.alert .sev{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:2px 6px;border-radius:2px;border:1px solid;color:var(--text);margin-left:auto;font-family:var(--sans)}
+.alert.sev-info .sev{color:var(--green);border-color:var(--green)}
+.alert.sev-yellow .sev{color:var(--yellow);border-color:var(--yellow)}
+.alert.sev-red .sev{color:var(--red);border-color:var(--red)}
+.alert.sev-purple .sev{color:var(--purple);border-color:var(--purple)}
+.alert .body{font-size:12px;color:var(--muted);margin-bottom:6px}
+.alert .meta{display:flex;gap:8px;align-items:center;font-size:10px;color:var(--muted2);font-family:var(--mono);flex-wrap:wrap}
+.alert .meta .ack{color:var(--green)}
+.alert.acked{opacity:.5}
+.alert.acked .ttl{text-decoration:line-through}
+.wrap{max-width:600px;margin:0 auto}
+.stats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.stat{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;flex:1;min-width:80px;text-align:center}
+.stat .v{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--text)}
+.stat .k{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:2px;font-family:var(--sans)}
+footer{max-width:600px;margin:16px auto 0;padding:8px 0 24px;border-top:1px solid var(--border);color:var(--muted2);font-size:10px;display:flex;justify-content:space-between;flex-wrap:wrap}
+.sp{flex:1}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>Void<b>Main</b><span>Alerts · phone</span></h1>
+  <span class="chip" id="conn">—</span>
+  <span class="sp"></span>
+  <span style="font-size:11px;color:var(--muted2);font-family:var(--mono)"><span id="count">0</span> alerts</span>
+</div>
+
+<div class="wrap">
+  <div class="stats" id="stats">
+    <div class="stat"><div class="v" id="s-open">0</div><div class="k">Open</div></div>
+    <div class="stat"><div class="v" id="s-acked">0</div><div class="k">Acknowledged</div></div>
+    <div class="stat"><div class="v" id="s-red">0</div><div class="k">Red</div></div>
+    <div class="stat"><div class="v" id="s-purple">0</div><div class="k">Purple</div></div>
+  </div>
+  <div id="alerts"><div class="empty-state">Loading alerts…</div></div>
+</div>
+
+<footer>
+  <span>VoidMain · <span id="ver">v—</span></span>
+  <span id="ts">—</span>
+</footer>
+
+<script>
+"use strict";
+(function(){
+  var alertsEl = document.getElementById("alerts");
+  var connEl = document.getElementById("conn");
+  var countEl = document.getElementById("count");
+  var openEl = document.getElementById("s-open");
+  var ackedEl = document.getElementById("s-acked");
+  var redEl = document.getElementById("s-red");
+  var purpEl = document.getElementById("s-purple");
+  var tsEl = document.getElementById("ts");
+  var verEl = document.getElementById("ver");
+
+  var seen = new Set();
+  var alerts = [];
+  var timer = null;
+
+  function renderStats() {
+    var open = 0, acked = 0, red = 0, purp = 0;
+    for (var i = 0; i < alerts.length; i++) {
+      var a = alerts[i];
+      if (a.ack) acked++; else open++;
+      if (a.sev === "red") red++;
+      if (a.sev === "purple") purp++;
+    }
+    openEl.textContent = open;
+    ackedEl.textContent = acked;
+    redEl.textContent = red;
+    purpEl.textContent = purp;
+    countEl.textContent = alerts.length;
+  }
+
+  function fmtTs(ts) {
+    if (!ts) return "—";
+    var d = new Date(ts * 1000);
+    var hh = String(d.getUTCHours()).padStart(2,"0");
+    var mm = String(d.getUTCMinutes()).padStart(2,"0");
+    return hh + ":" + mm + " UTC";
+  }
+
+  function renderAlerts() {
+    if (!alerts.length) {
+      alertsEl.innerHTML = '<div class="empty-state">No alerts — mesh nominal</div>';
+      return;
+    }
+    var html = "";
+    for (var i = 0; i < alerts.length; i++) {
+      var a = alerts[i];
+      var sev = a.sev || "info";
+      var cls = "alert sev-" + sev + (a.ack ? " acked" : "");
+      var ackTag = a.ack ? '<span class="ack">ACK</span>' : "";
+      html += '<div class="' + cls + '">' +
+        '<span class="bar"></span>' +
+        '<div class="head">' +
+          '<span class="ttl">' + esc(a.title || "Alert") + '</span>' +
+          '<span class="sev">' + sev.toUpperCase() + '</span>' +
+        '</div>' +
+        '<div class="body">' + esc(a.body || "") + '</div>' +
+        '<div class="meta">' +
+          '<span>' + esc(a.src || "") + '</span>' +
+          '<span>' + fmtTs(a.ts) + '</span>' +
+          ackTag +
+        '</div>' +
+      '</div>';
+    }
+    alertsEl.innerHTML = html;
+    renderStats();
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function(c) {
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  function fetchAlerts() {
+    fetch("/alerts.json")
+      .then(function(r){ if (!r.ok) throw new Error("unauthorized"); return r.json(); })
+      .then(function(data) {
+        var changed = false;
+        var incoming = data.alerts || [];
+        // merge: keep existing order, update ack status for known ids
+        var incomingMap = {};
+        for (var i = 0; i < incoming.length; i++) {
+          incomingMap[incoming[i].id] = incoming[i];
+        }
+        var rebuilt = [];
+        var pending = {};
+        for (var j = 0; j < alerts.length; j++) {
+          var old = alerts[j];
+          if (incomingMap[old.id]) {
+            var newer = incomingMap[old.id];
+            if (newer.ack !== old.ack || newer.ts !== old.ts) changed = true;
+            rebuilt.push(newer);
+            delete incomingMap[old.id];
+          } else {
+            rebuilt.push(old);
+          }
+        }
+        // add new ones
+        var ids = {};
+        for (var k = 0; k < rebuilt.length; k++) ids[rebuilt[k].id] = true;
+        for (var id in incomingMap) {
+          if (!ids[id]) {
+            rebuilt.unshift(incomingMap[id]);
+            changed = true;
+          }
+        }
+        if (rebuilt.length !== alerts.length) changed = true;
+        alerts = rebuilt.slice(0, 200);
+        if (changed) renderAlerts();
+      })
+      .catch(function(err) {
+        if (err.message === "unauthorized") {
+          connEl.textContent = "LOCKED";
+          connEl.className = "chip offline";
+          alertsEl.innerHTML = '<div class="empty-state">Session expired — open the dashboard to re-authenticate</div>';
+        }
+      });
+  }
+
+  function updateConn() {
+    fetch("/healthz")
+      .then(function(r){ return r.json(); })
+      .then(function(h) {
+        var connected = h.mqtt_connected;
+        var c = connEl;
+        if (connected) { c.textContent = "LIVE"; c.className = "chip live"; }
+        else { c.textContent = "DEGRADED"; c.className = "chip stale"; }
+        verEl.textContent = "v" + (h.version || "?");
+      })
+      .catch(function(){ /* ignore */ });
+  }
+
+  function tick() {
+    var d = new Date();
+    var hh = String(d.getUTCHours()).padStart(2,"0");
+    var mm = String(d.getUTCMinutes()).padStart(2,"0");
+    var ss = String(d.getUTCSeconds()).padStart(2,"0");
+    tsEl.textContent = hh + ":" + mm + ":" + ss + " UTC";
+  }
+
+  fetchAlerts();
+  updateConn();
+  timer = window.setInterval(fetchAlerts, 3000);
+  window.setInterval(tick, 1000);
+  tick();
+
+  // refresh on focus (user comes back to the phone)
+  window.addEventListener("focus", function(){ fetchAlerts(); updateConn(); });
+})();
+</script>
+</body>
+</html>

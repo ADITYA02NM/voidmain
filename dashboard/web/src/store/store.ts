@@ -333,7 +333,22 @@ export class Store {
         }
         case "alert": {
           const d = env.d as AlertD;
-          if (!d.id || this.seen.has(d.id)) break;
+          if (!d.id) break;
+          if (this.seen.has(d.id)) {
+            // ACK update for an alert already on screen: the director republishes
+            // the same id with ack:true after voidmain/ack/<id>, so every open
+            // laptop flips together instead of the frame being dropped.
+            if (d.ack) {
+              const idx = alerts.findIndex((a) => a.id === d.id);
+              if (idx >= 0 && !alerts[idx]!.ack) {
+                if (!alertsChanged) { alerts = alerts.slice(); alertsChanged = true; }
+                alerts[idx] = { ...alerts[idx]!, ack: true, ack_ts: d.ack_ts ?? null };
+                if (s.openCount > 0) s.openCount -= 1;
+                s.ackDone += 1;
+              }
+            }
+            break;
+          }
           this.seen.add(d.id);
           if (!alertsChanged) { alerts = alerts.slice(); alertsChanged = true; }
           alerts.unshift(d);

@@ -66,6 +66,38 @@ th{color:var(--muted);font-family:var(--sans);font-size:10px;letter-spacing:.08e
 .mt8{margin-top:8px}
 .mt10{margin-top:12px}
 .mt12{margin-top:12px}
+/* trigger console (laptop 3) */
+.tgroups{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
+.tgroup{background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px}
+.tgroup h3{font-family:var(--sans);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+.tbtns{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.trow{display:flex;align-items:center;gap:4px;padding:3px 0;border-bottom:1px solid var(--border)}
+.trow:last-child{border-bottom:0}
+.tname{flex:1;font-family:var(--sans);font-size:11px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+button.sev{padding:2px 6px;font-size:9px;box-shadow:none}
+.sev-green{color:var(--green)}
+.sev-yellow{color:var(--yellow)}
+.sev-red{color:var(--red)}
+.sev-purple{color:var(--purple)}
+#trig-code{background:var(--panel2);border:1px solid var(--border2);color:var(--text);border-radius:var(--radius);padding:4px 6px;font-family:var(--mono);font-size:12px;letter-spacing:.12em}
+#trig-log{margin-top:8px;max-height:120px;overflow:auto;font-size:11px;line-height:1.45}
+#trig-log .muted{color:var(--muted2)}
+.trig-colour{display:flex;align-items:center;gap:8px;margin:6px 0 10px}
+.trig-dot{width:14px;height:14px;border-radius:2px;background:var(--muted-2);border:1px solid var(--border2);transition:background .25s, box-shadow .25s, transform .1s}
+.trig-dot.on{background:var(--green);box-shadow:0 0 8px var(--green)}
+.trig-dot.on.yellow{background:var(--yellow);box-shadow:0 0 8px var(--yellow)}
+.trig-dot.on.red{background:var(--red);box-shadow:0 0 10px var(--red)}
+.trig-dot.on.purple{background:var(--purple);box-shadow:0 0 10px var(--purple)}
+.trig-dot.pulse{animation:trig-pulse 1.2s infinite}
+@keyframes trig-pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.trig-src{margin-left:8px;font-family:var(--sans);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.trig-src b{color:var(--text)}
+#trig-groups .tgroup{padding:8px 10px}
+#trig-groups .tbtns{gap:6px}
+#trig-groups button{font-size:10px;padding:5px 8px}
+#trig-preset-green{font-size:11px;padding:6px 10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+#trig-preset-full{font-size:11px;padding:6px 10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+#trig-ack-last{font-size:11px;padding:6px 10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -73,7 +105,7 @@ th{color:var(--muted);font-family:var(--sans);font-size:10px;letter-spacing:.08e
 <div class="topbar">
   <h1>Void<b>Main</b><span>WS debug</span></h1>
   <span class="chip offline" id="conn">OFFLINE</span>
-  <span class="ro">READ-ONLY · publishes nothing (clock-sync only)</span>
+  <span class="ro">SESSION-GATED · triggers publish voidmain/sim/* only (never risk/#)</span>
   <span class="muted"><b id="fcount">0</b> frames · <b id="errcount">0</b> contract errors</span>
   <span class="sp"></span>
   <button id="pause">Pause</button>
@@ -120,12 +152,45 @@ th{color:var(--muted);font-family:var(--sans);font-size:10px;letter-spacing:.08e
     <div class="kv"><span class="k">history points</span><span id="s-hist">0</span></div>
     <h2 class="mt10">node health age</h2>
     <div id="s-nodes"></div>
+  </div>  <!-- 6. AI console — local RAG + Ollama, zero cloud -->
+  <div class="panel c12">
+    <h2>6 · Console assistant <span class="muted">— local RAG over this repo + Ollama (zero cloud) · sees score/band/nodes/alerts/devices/SIM tour/live state</span></h2>
+    <div class="row mt8">
+      <input id="ai-prompt" class="sp" type="text" placeholder="Ask about the current risk state, bands, nodes, alerts, devices, the SIM tour, commands, or the ESP32 panel…">
+      <button id="ai-ask">Ask</button>
+    </div>
+    <div id="ai-block" class="muted mt8">polling assistant availability…</div>
   </div>
 
-  <!-- 6. Contract check -->
+  <!-- 7. Contract check -->
   <div class="panel c7">
-    <h2>6 · Contract check (dashboard.md §5)</h2>
+    <h2>7 · Contract check (dashboard.md §5)</h2>
     <div id="contract" class="muted">No frames yet.</div>
+  </div>
+
+  <!-- 8. Trigger console -->
+  <div class="panel c12">
+    <h2>8 · Trigger console <span class="muted">— every press goes out on the real bus and moves dashboard + ESP32 together</span></h2>
+    <div class="tbtns mt8" style="margin-bottom:8px">
+      <span class="chip offline" id="auth-chip">LOCKED</span>
+      <span id="trig-auth">LAN ACCESS CODE <input id="trig-code" type="password" placeholder="code" autocomplete="off" size="12"> <button id="trig-signin">Unlock</button></span>
+      <span class="muted" id="trig-hint">Enter the access code once — buttons, WS frames and ACKs share that session.</span>
+      <span class="sp"></span>
+      <button id="trig-preset-green" class="sev-green">GREEN baseline</button>
+      <button id="trig-preset-full">FULL TOUR</button>
+      <button id="trig-ack-last">ACK last alert</button>
+      <span id="trig-status" class="muted">—</span>
+    </div>
+
+    <!-- colour strip: mirrors the bus (and, when WiFi+MQTT are reachable, an FPGA/tinysim) -->
+    <div class="trig-colour" id="trig-colour">
+      <span class="trig-dot" data-sev="green"></span><span class="trig-dot" data-sev="yellow"></span>
+      <span class="trig-dot" data-sev="red"></span><span class="trig-dot" data-sev="purple"></span>
+      <span class="trig-src">mirror: <b id="trig-mirror-src">bus</b></span>
+    </div>
+
+    <div id="trig-groups" class="tgroups">loading catalogue…</div>
+    <div id="trig-log" class="muted">no triggers fired yet</div>
   </div>
 
   <!-- 2. Frame log -->
@@ -153,6 +218,8 @@ th{color:var(--muted);font-family:var(--sans);font-size:10px;letter-spacing:.08e
   var snap={score:null, band:null, nodes:{}, hist:0};
   var alertAck={};               // id -> ack
   var errCount=0;
+  // trigger console (laptop 3)
+  var cat=null, authed=false, lastAlertId=null, tlog=[];
 
   // ---- clock sync ----
   function median(a){ if(!a.length) return 0; var s=a.slice().sort(function(x,y){return x-y}); return s[Math.floor(s.length/2)]; }
@@ -197,7 +264,7 @@ th{color:var(--muted);font-family:var(--sans);font-size:10px;letter-spacing:.08e
     else if(t==="band" && d) snap.band=d.b;
     else if(t==="health" && d && d.node) snap.nodes[d.node]=Date.now();
     else if(t==="history" && d && Array.isArray(d.points)) snap.hist=d.points.length;
-    else if(t==="alert" && d && d.id!=null) alertAck[d.id]=!!d.ack;
+    else if(t==="alert" && d && d.id!=null){ alertAck[d.id]=!!d.ack; lastAlertId=d.id; }
     // log store
     frames.unshift({clientTs:Date.now(), ts:env.ts, t:t, d:d, raw:raw, bad:bad});
     if(frames.length>1000) frames.pop();
@@ -311,6 +378,10 @@ th{color:var(--muted);font-family:var(--sans);font-size:10px;letter-spacing:.08e
     this.textContent="Copied "+shown.length; var self=this; setTimeout(function(){self.textContent="Copy shown JSON";},1200);
   });
 
+  // trigger console controls
+  $("#trig-signin").addEventListener("click",signIn);
+  $("#trig-code").addEventListener("keydown",function(e){ if(e.key==="Enter") signIn(); });
+
   // ---- /healthz poll ----
   function pollHealth(){
     fetch("/healthz",{cache:"no-store"}).then(function(r){return r.json();}).then(function(j){
@@ -318,7 +389,387 @@ th{color:var(--muted);font-family:var(--sans);font-size:10px;letter-spacing:.08e
     }).catch(function(){ $("#c-health").className="err"; $("#c-health").textContent="unreachable"; });
   }
 
-  // ---- websocket (read-only) ----
+  // ---- trigger console (laptop 3) ----
+  function authChip(){
+    var c=$("#auth-chip");
+    c.className="chip "+(authed?"live":"offline");
+    c.textContent=authed?"SESSION OK":"LOCKED";
+    $("#trig-auth").hidden=authed;
+    $("#trig-hint").textContent=authed
+      ? "Session active — buttons, WS frames and ACKs share it."
+      : "Enter the LAN access code to unlock the buttons.";
+  }
+  function trigStatus(ok,msg){
+    var el=$("#trig-status"); el.className=ok?"ok":"err";
+    el.textContent=(ok?"OK · ":"FAIL · ")+msg;
+  }
+  function pushLog(line,ok){
+    tlog.unshift(new Date().toTimeString().slice(0,8)+" "+(ok?"+ ":"x ")+line);
+    if(tlog.length>40) tlog.pop();
+    var box=$("#trig-log"); box.textContent="";
+    tlog.forEach(function(l,i){
+      var d=document.createElement("div");
+      d.className=i===0?(ok?"ok":"err"):"muted";
+      d.textContent=l; box.appendChild(d);
+    });
+  }    // colour strip mirror: follows the last band + alert/device sev seen on the bus.
+    var mirrorBand=null, mirrorSev=null, mirrorSource="bus";
+    function setMirrorColour(band, sev){
+      var dots=$("#trig-colour").querySelectorAll(".trig-dot");
+      dots.forEach(function(d){ d.classList.remove("on","pulse",d.dataset.sev); d.classList.remove("pulse"); });
+      if(band && band==="YELLOW"){
+        dots[1].classList.add("on", "yellow"); dots[1].classList.add("pulse");
+      } else if(band && band==="RED"){
+        dots[2].classList.add("on", "red");
+      } else if(band && band==="PURPLE"){
+        dots[3].classList.add("on", "purple"); dots[3].classList.add("pulse");
+      } else if(band && band==="GREEN"){
+        dots[0].classList.add("on", "green");
+      } else if(sev){
+        var map={green:0,yellow:1,red:2,purple:3,info:0};
+        var idx=map[sev]!=null?map[sev]:-1;
+        if(idx>=0){ dots[idx].classList.add("on", sev); dots[idx].classList.add("pulse"); }
+      }
+      mirrorBand=band; mirrorSev=sev;
+      var src=$("#trig-mirror-src");
+      src.textContent=mirrorSource.toUpperCase();
+      src.style.color = mirrorSource==="fpga"? "var(--purple)" : "var(--text)";
+    }
+
+    // small local tinysim: when the bus is live but no FPGA is wired, mirrors a
+    // FPGA-style green/yellow/red/purple indicator from the bus band + any
+    // alert/device sev seen on the wire. If WiFi+MQTT are reachable we also try
+    // to publish a real voidmain/sim/esp32-led-cycle so the ESP32 panel joins in.
+    var fpgaOnline=false, fpgaWifi=false, fpgaMqtt=false;
+    function probeFpga(){
+      // We only claim FPGA is online when we can reach the backend over the LAN
+      // (same network as a hypothetical FPGA/tinysim) AND the MQTT bridge is up.
+      fetch("/healthz",{cache:"no-store"}).then(function(r){ return r.json(); })
+        .then(function(j){
+          fpgaWifi = true;
+          fpgaMqtt = !!(j && j.mqtt_connected);
+          fpgaOnline = fpgaWifi && fpgaMqtt;
+          mirrorSource = fpgaOnline ? "fpga+tinysim" : (fpgaWifi ? "tinysim" : "bus");
+          setMirrorColour(mirrorBand, mirrorSev);
+        }).catch(function(){ fpgaWifi=false; fpgaOnline=false; });
+    }
+    function firePresetGreen(){
+      // one-press GREEN baseline: score 10 + band GREEN.
+      if(!authed){ trigStatus(false,"sign in first"); return; }
+      fire("score", {v:10});
+      // if FPGA/tinysim is reachable, also nudge the ESP32 LED to green
+      if(fpgaOnline){ fire("sim/esp32-led", {led:"green"}); }
+    }
+    function firePresetFull(){
+      if(!authed){ trigStatus(false,"sign in first"); return; }
+      trigStatus(true,"FULL TOUR started on the bus");
+      pushLog("FULL TOUR GREEN->YELLOW->RED->PURPLE->GREEN","+ ");
+      // hand the tour to the bus director; everything (dashboard, this console,
+      // ESP32) follows on the same MQTT stream.
+      fire("start");
+    }
+    function ackLast(){
+      if(!lastAlertId){ trigStatus(false,"no alert yet"); return; }
+      if(!ws||ws.readyState!==1){ trigStatus(false,"WS not connected"); return; }
+      ws.send(JSON.stringify({ack:lastAlertId}));
+      trigStatus(true,"ACK sent for "+lastAlertId);
+      pushLog("ACK "+lastAlertId,true);
+    }
+
+    $("#trig-signin").addEventListener("click",signIn);
+    $("#trig-code").addEventListener("keydown",function(e){ if(e.key==="Enter") signIn(); });
+    $("#trig-reset").addEventListener("click",function(){ fire("sim/global_state",{score:0}); });
+    $("#trig-preset-green").addEventListener("click",firePresetGreen);
+    $("#trig-preset-full").addEventListener("click",firePresetFull);
+    $("#trig-ack-last").addEventListener("click",ackLast);
+
+    // wire preset buttons into the existing fire()/ackLast() helpers
+    function boot(){
+      fetch("/auth/status",{cache:"no-store"}).then(function(r){return r.json();}).then(function(j){
+        authed=!!j.authenticated; authChip();
+        if(authed){ loadCatalogue(); connect(); probeFpga(); } else { schedule(); }
+      }).catch(function(){ authed=false; authChip(); schedule(); });
+    }
+  function signIn(){
+    var code=$("#trig-code").value;
+    if(!code){ trigStatus(false,"enter the access code"); return; }
+    fetch("/auth/demo",{method:"POST",headers:{"Content-Type":"application/json"},
+                        body:JSON.stringify({code:code})})
+      .then(function(r){ return r.text().then(function(t){ return {ok:r.ok,t:t}; }); })
+      .then(function(res){
+        if(res.ok){
+          authed=true; authChip(); trigStatus(true,"console unlocked");
+          pushLog("signed in with LAN access code",true);
+          loadCatalogue(); connect();
+        } else { trigStatus(false,res.t||"sign-in failed"); pushLog("sign-in failed",false); }
+      })
+      .catch(function(){ trigStatus(false,"server unreachable"); });
+  }
+  function loadCatalogue(){
+    fetch("/debug/triggers",{cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      return r.json();
+    }).then(function(c){ cat=c; renderTriggers(); })
+      .catch(function(e){ $("#trig-groups").textContent="catalogue unavailable ("+e.message+")"; });
+  }
+  function fire(id,extra){
+    if(!authed){ trigStatus(false,"sign in first"); return; }
+    var body={id:id};
+    if(extra){ for(var k in extra){ body[k]=extra[k]; } }
+    var label=id+(body.v!==undefined?" "+body.v:"")+(body.s?" "+body.s:"");
+    fetch("/debug/trigger",{method:"POST",headers:{"Content-Type":"application/json"},
+                            body:JSON.stringify(body)})
+      .then(function(r){ return r.text().then(function(t){ return {ok:r.ok,t:t}; }); })
+      .then(function(res){
+        trigStatus(res.ok, res.ok?("voidmain/sim/"+id):(res.t||"rejected"));
+        pushLog(label,res.ok);
+        // best-effort local mirror for preset triggers that change the band now.
+        if(res.ok && (id==="score" || id.indexOf("preset/")===0) && body.v!=null){
+          var b=bandFromScore(body.v); setMirrorColour(b, null);
+        }
+      })
+      .catch(function(){ trigStatus(false,"server unreachable"); pushLog(id+" — unreachable",false); });
+    function bandFromScore(v){
+      v=Number(v)||0;
+      if(v>=85) return "PURPLE";
+      if(v>=60) return "RED";
+      if(v>=30) return "YELLOW";
+      return "GREEN";
+    }
+  }
+  function ackLast(){
+    if(!lastAlertId){ trigStatus(false,"no alert yet"); return; }
+    if(!ws||ws.readyState!==1){ trigStatus(false,"WS not connected"); return; }
+    ws.send(JSON.stringify({ack:lastAlertId}));
+    trigStatus(true,"ACK sent for "+lastAlertId);
+    pushLog("ACK "+lastAlertId,true);
+    // mirror clears when the alert opens are gone
+    setTimeout(function(){ if(lastAlertId && mirrorSev){ setMirrorColour(mirrorBand, null); } }, 600);
+  }  function mkBtn(parent,label,cls,fn){
+    var b=document.createElement("button");
+    if(cls) b.className=cls;
+    b.textContent=label; b.addEventListener("click",fn); parent.appendChild(b); return b;
+  }
+  function group(title){
+    var g=document.createElement("div"); g.className="tgroup";
+    var h=document.createElement("h3"); h.textContent=title; g.appendChild(h);
+    $("#trig-groups").appendChild(g); return g;
+  }
+  function btnRow(g){ var r=document.createElement("div"); r.className="tbtns"; g.appendChild(r); return r; }
+  function renderTriggers(){
+    var root=$("#trig-groups"); root.textContent="";
+    if(!cat){ root.textContent="no catalogue"; return; }
+    var label={}; cat.triggers.forEach(function(t){ label[t.id]=t.label; });
+
+    var    g=group("0 · presets (one-press sequences)"), r=btnRow(g);
+    (cat.presets||[]).forEach(function(p){
+      var fn=null;
+      if(p.id==="preset/ack-story"){ fn=function(){ ackLast(); }; }
+      else if(p.id==="preset/failure-node-down"){ fn=function(){ fire("health",{v:"pi3a",s:"down"}); }; }
+      else if(p.id==="preset/failure-node-up"){ fn=function(){ fire("health",{v:"pi3a",s:"up"}); }; }
+      else if(p.id==="preset/edge-ids"){
+        fn=function(){
+          fire("lan-unknown"); setTimeout(function(){ fire("wifi-rogue"); },150);
+          setTimeout(function(){ fire("suricata"); },300);
+        };
+      }
+      else if(p.id==="preset/esp32-led-cycle"){
+        fn=function(){
+          ["green","yellow","red","purple"].forEach(function(c,i){
+            setTimeout(function(){ fire("sim/esp32-led",{led:c}); }, i*400);
+          });
+        };
+      }
+      else { fn=function(){ fire(p.id); }; }
+      mkBtn(r,p.label||p.id,"sev-"+(p.sev||""),fn);
+      if(p.hint){ (r.lastChild as any).title=p.hint; }
+    });
+    g=group("1 · scripted tour"), r=btnRow(g);
+    mkBtn(r,"▶ "+(label["start"]||"start"),"",function(){ fire("start"); });
+    mkBtn(r,"■ "+(label["stop"]||"stop"),"",function(){ fire("stop"); });
+    mkBtn(r,"RESET","",function(){ fire("sim/global_state",{score:0}); });
+
+    g=group("2 · risk score → band + LED"); r=btnRow(g);
+    cat.score_presets.forEach(function(v){ mkBtn(r,String(v),"",function(){ fire("score",{v:v}); }); });
+
+    g=group("3 · band presets"); r=btnRow(g);
+    Object.keys(cat.band_presets).forEach(function(b){
+      mkBtn(r,b,"sev-"+b.toLowerCase(),function(){ fire("score",{v:cat.band_presets[b]}); });
+    });
+
+    g=group("4 · alerts + ACK"); r=btnRow(g);
+    cat.alert_sevs.forEach(function(sev){ mkBtn(r,"+ "+sev,"sev-"+sev,function(){ fire("alert",{v:sev}); }); });
+    cat.triggers.forEach(function(t){ if(t.group==="alert"&&t.id!=="alert"){ mkBtn(r,t.label,"",function(){ fire(t.id); }); } });
+    mkBtn(r,"ACK last alert","",ackLast);
+
+    g=group("5 · IoT devices ("+cat.devices.length+")");
+    cat.devices.forEach(function(d){
+      var row=document.createElement("div"); row.className="trow";
+      var nm=document.createElement("span"); nm.className="tname"; nm.textContent=d.name;
+      nm.title=d.kind+" · "+d.room; row.appendChild(nm);
+      cat.sevs.forEach(function(sev){
+        var b=mkBtn(row,sev,"sev sev-"+sev,function(){ fire("device",{v:d.id,s:sev}); });
+        b.title=d.name+" → "+d.states[sev];
+      });
+      g.appendChild(row);
+    });
+
+    g=group("6 · node heartbeats"); r=btnRow(g);
+    cat.nodes.forEach(function(n){
+      mkBtn(r,n+" up","sev-green",function(){ fire("health",{v:n,s:"up"}); });
+      mkBtn(r,n+" down","sev-red",function(){ fire("health",{v:n,s:"down"}); });
+    });
+    var esp=document.createElement("span"); esp.className="ro"; esp.textContent="esp32 = real board";
+    r.appendChild(esp);
+
+    g=group("7 · IDS / network edge"); r=btnRow(g);
+    cat.triggers.forEach(function(t){ if(t.group==="edge"){ mkBtn(r,t.label,"",function(){ fire(t.id); }); } });
+  }
+  function fire(id,extra){
+    if(!authed){ trigStatus(false,"sign in first"); return; }
+    var body={id:id};
+    if(extra){ for(var k in extra){ body[k]=extra[k]; } }
+    var label=id+(body.v!==undefined?" "+body.v:"")+(body.s?" "+body.s:"");
+    fetch("/debug/trigger",{method:"POST",headers:{"Content-Type":"application/json"},
+                            body:JSON.stringify(body)})
+      .then(function(r){ return r.text().then(function(t){ return {ok:r.ok,t:t}; }); })
+      .then(function(res){
+        trigStatus(res.ok, res.ok?("voidmain/sim/"+id):(res.t||"rejected"));
+        pushLog(label,res.ok);
+        // best-effort local mirror for preset triggers that change the band now.
+        if(res.ok && (id==="score" || id.indexOf("preset/")===0) && body.v!=null){
+          var b=bandFromScore(body.v); setMirrorColour(b, null);
+        }
+      })
+      .catch(function(){ trigStatus(false,"server unreachable"); pushLog(id+" — unreachable",false); });
+    function bandFromScore(v){
+      v=Number(v)||0;
+      if(v>=85) return "PURPLE";
+      if(v>=60) return "RED";
+      if(v>=30) return "YELLOW";
+      return "GREEN";
+    }
+  }
+  function ackLast(){
+    if(!lastAlertId){ trigStatus(false,"no alert yet"); return; }
+    if(!ws||ws.readyState!==1){ trigStatus(false,"WS not connected"); return; }
+    ws.send(JSON.stringify({ack:lastAlertId}));
+    trigStatus(true,"ACK sent for "+lastAlertId);
+    pushLog("ACK "+lastAlertId,true);
+    // mirror clears when the alert opens are gone
+    setTimeout(function(){ if(lastAlertId && mirrorSev){ setMirrorColour(mirrorBand, null); } }, 600);
+  }
+  function boot(){
+    fetch("/auth/status",{cache:"no-store"}).then(function(r){return r.json();}).then(function(j){
+      authed=!!j.authenticated; authChip();
+      if(authed){ loadCatalogue(); connect(); } else { schedule(); }
+    }).catch(function(){ authed=false; authChip(); schedule(); });
+    $("#trig-signin").addEventListener("click",signIn);
+    $("#trig-code").addEventListener("keydown",function(e){ if(e.key==="Enter") signIn(); });
+    $("#trig-reset").addEventListener("click",function(){ fire("sim/global_state",{score:0}); });
+
+    // ---- /healthz poll ----
+    function pollHealth(){
+      fetch("/healthz",{cache:"no-store"}).then(function(r){return r.json();}).then(function(j){
+        $("#c-health").className=""; $("#c-health").textContent=JSON.stringify(j);
+      }).catch(function(){ $("#c-health").className="err"; $("#c-health").textContent="unreachable"; });
+    }
+
+    // ---- trigger console (laptop 3) ----
+    function authChip(){
+      var c=$("#auth-chip"); c.className="chip "+(authed?"live":"offline");
+      c.textContent=authed?"SESSION OK":"LOCKED";
+      $("#trig-auth").hidden=authed;
+      $("#trig-hint").textContent=authed
+        ? "Session active — buttons, WS frames and ACKs share it."
+        : "Enter the LAN access code to unlock the buttons.";
+    }
+    function trigStatus(ok,msg){
+      var el=$("#trig-status"); el.className=ok?"ok":"err";
+      el.textContent=(ok?"OK · ":"FAIL · ")+msg;
+    }
+    function pushLog(line,ok){
+      tlog.unshift(new Date().toTimeString().slice(0,8)+" "+(ok?"+ ":"x ")+line);
+      if(tlog.length>40) tlog.pop();
+      var box=$("#trig-log"); box.textContent="";
+      tlog.forEach(function(l,i){
+        var d=document.createElement("div");
+        d.className=i===0?(ok?"ok":"err"):"muted";
+        d.textContent=l; box.appendChild(d);
+      });
+    }
+    function signIn(){
+      var code=$("#trig-code").value;
+      if(!code){ trigStatus(false,"enter the access code"); return; }
+      fetch("/auth/demo",{method:"POST",headers:{"Content-Type":"application/json"},
+                          body:JSON.stringify({code:code})})
+        .then(function(r){ return r.text().then(function(t){ return {ok:r.ok,t:t}; }); })
+        .then(function(res){
+          if(res.ok){
+            authed=true; authChip(); trigStatus(true,"console unlocked");
+            pushLog("signed in with LAN access code",true);
+            loadCatalogue(); connect();
+          } else { trigStatus(false,res.t||"sign-in failed"); pushLog("sign-in failed",false); }
+        })
+        .catch(function(){ trigStatus(false,"server unreachable"); });
+    }
+    function loadCatalogue(){
+      fetch("/debug/triggers",{cache:"no-store"}).then(function(r){
+        if(!r.ok) throw new Error("HTTP "+r.status);
+        return r.json();
+      }).then(function(c){ cat=c; renderTriggers(); })
+        .catch(function(e){ $("#trig-groups").textContent="catalogue unavailable ("+e.message+")"; });
+    }
+
+    // ---- AI console (laptop 3, session-gated) ----
+    var aiBusy=false;
+    function aiStatus(text,cls){
+      $("#ai-block").className = cls||"muted"; $("#ai-block").textContent=text;
+    }
+    function aiPoll(){
+      fetch("/ai/models",{cache:"no-store"}).then(function(r){ return r.json(); })
+        .then(function(j){
+          if(!j || !j.enabled){ aiStatus("assistant disabled on this server (VOIDMAIN_AI=0)","muted"); return; }
+          var dot = j.active ? "<span class=\"ok\">●</span> active" : "<span class=\"err\">●</span> model not loaded";
+          aiStatus(j.model+" · "+dot,"ok");
+        }).catch(function(){ aiStatus("assistant health check failed","err"); });
+    }
+    function askAI(q){
+      if(aiBusy){ aiStatus("already asking — wait for the reply","warn"); return; }
+      if(!authed && !ws){ aiStatus("sign in to use the assistant","err"); return; }
+      aiBusy=true; aiStatus("asking "+q+" …","warn");
+      fetch("/ai/ask",{method:"POST",headers:{"Content-Type":"application/json"},
+                        body:JSON.stringify({q:q})})
+        .then(function(r){ return r.json(); })
+        .then(function(j){
+          if(!j){ aiStatus("assistant returned nothing","err"); aiBusy=false; return; }
+          var lines=[];
+          lines.push("<b>"+(j.mode||"unknown")+"</b>");
+          if(j.answer) lines.push(j.answer.replace(/\n/g,"<br>"));
+          if(j.sources && j.sources.length){
+            var src="sources: "+(j.sources.slice(0,5).map(function(s){ return s.source||"?"; }).join(", "));
+            lines.push("<span class=\"muted\">"+src+"</span>");
+          }
+          var html=lines.join("<br>");
+          aiStatus(html, j.mode==="model"?"ok":"warn");
+          aiBusy=false;
+        })
+        .catch(function(){ aiStatus("assistant unreachable","err"); aiBusy=false; });
+    }
+
+    // ---- AI console UI ----
+    $("#ai-ask").addEventListener("click",function(){
+      var q=$("#ai-prompt").value;
+      if(!q){ aiStatus("type a question first","err"); return; }
+      askAI(q);
+    });
+    $("#ai-prompt").addEventListener("keydown",function(e){
+      if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); $("#ai-ask").click(); }
+    });
+    aiPoll();
+    setInterval(aiPoll,15000);
+
+  // ---- websocket (session-gated) ----
   function setConn(){ var c=$("#conn"); var st=connected?(Date.now()-lastMsg>5000?"stale":"live"):"offline"; c.className="chip "+st; c.textContent=st.toUpperCase(); }
   function connect(){
     try{ ws=new WebSocket((location.protocol==="https:"?"wss://":"ws://")+location.host+"/ws"); }
@@ -328,13 +779,32 @@ th{color:var(--muted);font-family:var(--sans);font-size:10px;letter-spacing:.08e
       lastMsg=Date.now();
       var m; try{ m=JSON.parse(ev.data); }catch(e){ return; }
       if(m && m.ctl==="pong"){ onPong(m); return; }
-      if(m && typeof m.t==="string" && !paused) onFrame(m, ev.data);
+      if(m && typeof m.t==="string" && !paused){
+        onFrame(m, ev.data);
+        // mirror the bus colour to the strip + FPGA/tinysim indicator
+        var band=m.t==="band"&&m.d&&m.d.b?m.d.b:null;
+        var sev=m.t==="alert"&&m.d&&m.d.sev?m.d.sev
+                :m.t==="device"&&m.d&&m.d.sev?m.d.sev:null;
+        if(band || sev){ setMirrorColour(band, sev); }
+      }
       setConn();
     });
     ws.addEventListener("close",function(){ connected=false; reconnects+=1; setConn(); schedule(); });
     ws.addEventListener("error",function(){ try{ws.close();}catch(e){} });
+
+    // ---- AI console UI ----
+    $("#ai-ask").addEventListener("click",function(){
+      var q=$("#ai-prompt").value;
+      if(!q){ aiStatus("type a question first","err"); return; }
+      askAI(q);
+    });
+    $("#ai-prompt").addEventListener("keydown",function(e){
+      if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); $("#ai-ask").click(); }
+    });
+    aiPoll();
+    setInterval(aiPoll,15000);
   }
-  function schedule(){ setTimeout(connect,backoff*1000); backoff=Math.min(backoff*2,5); }
+  function schedule(){ setTimeout(function(){ if(authed) connect(); else boot(); },backoff*1000); backoff=Math.min(backoff*2,5); }
 
   // ---- timers ----
   setInterval(ping,3000);                 // clock sync
@@ -343,7 +813,7 @@ th{color:var(--muted);font-family:var(--sans);font-size:10px;letter-spacing:.08e
   setInterval(setConn,1000);
   setInterval(pollHealth,5000); pollHealth();
 
-  connect();
+  boot();
 })();
 </script>
 </body>

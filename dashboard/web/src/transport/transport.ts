@@ -1,6 +1,7 @@
 import type { Envelope } from "../contracts/ws";
 import { isEnvelope, isPong } from "../contracts/ws";
 import { store } from "../store/store";
+import { simulation } from "../lib/simulation";
 
 // WebSocket client: reconnect backoff, ACK queue + flush, clock-sync ping,
 // per-frame rAF batching, and post-paint latency measurement.
@@ -39,6 +40,18 @@ export class Transport {
     }
   }
 
+  // SIM TOUR relay: the server forwards this to voidmain/sim/* and the dev
+  // feed publishes the tour, so the bus drives dashboard + ESP32 together.
+  sendSim(action: "start" | "stop"): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ sim: action }));
+    }
+  }
+
+  get live(): boolean {
+    return !!this.ws && this.ws.readyState === WebSocket.OPEN;
+  }
+
   private connect(): void {
     if (this.stopped) return;
     let ws: WebSocket;
@@ -53,6 +66,7 @@ export class Transport {
       this.backoff = 1;
       this.lastMsg = Date.now();
       store.setConn("live");
+      simulation.onWsLive();
       while (this.ackQueue.length) ws.send(JSON.stringify({ ack: this.ackQueue.shift() }));
       this.ping();
       window.clearInterval(this.pingTimer);
@@ -70,6 +84,7 @@ export class Transport {
       this.connected = false;
       window.clearInterval(this.pingTimer);
       store.setConn("offline");
+      simulation.onWsOffline();
       this.schedule();
     };
     ws.onerror = () => { try { ws.close(); } catch { /* ignore */ } };

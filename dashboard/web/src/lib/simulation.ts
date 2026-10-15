@@ -3,6 +3,12 @@
 // ACK, toasts, degraded banner) without any server or MQTT dependency.
 // Pure frontend: injects straight into the store. Severity story:
 //   GREEN normal → YELLOW unusual → RED alert → PURPLE automation → GREEN.
+//
+// With the stack up (WS open) the tour runs ON THE BUS instead: start() relays
+// {sim:"start"} to the server, which publishes voidmain/sim/start and the dev
+// feed (tools/mock_feed.py) replays the scenario on MQTT — so the dashboard and
+// the ESP32 OLED change together. The local beat script below remains as the
+// offline fallback for a browser with no backend.
 import type { Envelope, PayloadFor } from "../contracts/ws";
 import { bandForScore } from "./bands";
 import { execCommand } from "./commands";
@@ -17,15 +23,20 @@ interface Beat { at: number; run: (cycle: number) => void; }
 
 export class Simulation {
   private running = false;
+  private busBacked = false;
   private cycle = 0;
   private alertSeq = 0;
   private target = 10;
   private score = 0;
   private silence = false;
+  private chaos = false;
   private startedAt = 0;
   private beatTimers: number[] = [];
   private scoreTimer = 0;
   private healthTimer = 0;
+  private chaosTimer = 0;
+  private hue = 0;
+  private reconnectTimer = 0;
 
   isRunning(): boolean { return this.running; }
 
@@ -51,73 +62,51 @@ export class Simulation {
     this.emit("device", { id, name, kind, room, sev, state, ...extra } as never);
   }
 
+  private poke(scoreJump?: number, sev?: string): void {
+    if (scoreJump != null) {
+      this.target = Math.max(0, Math.min(100, this.target + scoreJump));
+    }
+    if (sev) this.toast(`poke → ${sev}`, sev);
+  }
+
   private seedDevices(): void {
+    this.dev("campfire", "Campfire", "extinguish", "Backyard", "green", "Burning", { burning: true });
+    this.dev("air-purifier", "Air Purifier", "purifier", "Living Room", "green", "On auto", { on: true });
     this.dev("door-front", "Front Door", "lock", "Entrance", "green", "Locked", { locked: true });
-    this.dev("door-back", "Back Door", "lock", "Kitchen", "green", "Locked", { locked: true });
-    this.dev("light-living", "Living Light", "light", "Living Room", "green", "On", { on: true });
-    this.dev("light-bedroom", "Bedroom Light", "light", "Bedroom", "green", "Off", { on: false });
-    this.dev("light-porch", "Porch Light", "light", "Entrance", "green", "Off", { on: false });
-    this.dev("thermostat", "Thermostat", "thermostat", "Hallway", "green", "21°C · Heat");
-    this.dev("garage", "Garage Door", "garage", "Garage", "green", "Closed", { locked: true });
-    this.dev("plug-coffee", "Coffee Plug", "plug", "Kitchen", "green", "On", { on: true });
-    this.dev("plug-desk", "Desk Plug", "plug", "Office", "green", "On", { on: true });
-    this.dev("motion-hall", "Hall Motion", "motion", "Hallway", "green", "Clear");
+    this.dev("camera-front", "Front Camera", "camera", "Entrance", "green", "Armed recording", { on: true });
     this.dev("motion-yard", "Yard Motion", "motion", "Yard", "green", "Clear");
-    this.dev("smoke-kitchen", "Kitchen Smoke", "smoke", "Kitchen", "green", "Clear");
-    this.dev("leak-utility", "Utility Leak", "leak", "Utility", "green", "Dry");
-    this.dev("camera-front", "Front Camera", "camera", "Entrance", "green", "Armed · Recording", { on: true });
-    this.dev("camera-yard", "Yard Camera", "camera", "Yard", "green", "Armed · Recording", { on: true });
-    this.dev("purifier", "Air Purifier", "purifier", "Living Room", "green", "On · Auto", { on: true });
-    this.dev("curtain", "Bedroom Curtain", "curtain", "Bedroom", "green", "Closed", { on: false });
   }
 
   private iotScenario(): void {
-    // Phase 1 — unusual activity (YELLOW)
     this.dev("motion-yard", "Yard Motion", "motion", "Yard", "yellow", "Motion after hours");
-    this.dev("motion-hall", "Hall Motion", "motion", "Hallway", "yellow", "Motion detected after hours");
-    this.dev("thermostat", "Thermostat", "thermostat", "Hallway", "yellow", "24°C · Rising unexpectedly");
-    this.alert("yellow", "Unusual motion detected", "iot/motion-hall", "Hall + yard motion triggered at 02:14 — no one home");
+    this.alert("yellow", "Unusual motion detected", "iot/motion-yard", "Yard motion triggered — no one home");
     this.toast("YELLOW — unusual activity", "yellow");
   }
 
   private iotAlertPhase(): void {
-    // Phase 2 — red: alert sent to user
     this.dev("door-front", "Front Door", "lock", "Entrance", "red", "Opened unexpectedly", { locked: false });
-    this.dev("smoke-kitchen", "Kitchen Smoke", "smoke", "Kitchen", "red", "Smoke threshold exceeded");
     this.dev("camera-front", "Front Camera", "camera", "Entrance", "red", "Person detected", { on: true });
+    this.dev("campfire", "Campfire", "extinguish", "Backyard", "red", "Smoldering");
     this.alert("red", "Intrusion alert — door + camera", "iot/door-front", "Front door opened + camera person detection. Alert dispatched to owner.");
     this.toast("RED — alerts sent to owner", "red");
     this.target = 70;
   }
 
   private iotAutomationPhase(): void {
-    // Phase 3 — purple: automation executed
-    this.dev("door-front", "Front Door", "lock", "Entrance", "purple", "Auto-locked", { locked: true, automation: "Locked door remotely" });
-    this.dev("door-back", "Back Door", "lock", "Kitchen", "purple", "Auto-locked", { locked: true, automation: "Locked back door" });
-    this.dev("light-living", "Living Light", "light", "Living Room", "purple", "All lights ON", { on: true, automation: "Turned on all lights" });
-    this.dev("light-bedroom", "Bedroom Light", "light", "Bedroom", "purple", "All lights ON", { on: true, automation: "Turned on all lights" });
-    this.dev("light-porch", "Porch Light", "light", "Entrance", "purple", "All lights ON", { on: true, automation: "Turned on porch light" });
-    this.dev("camera-front", "Front Camera", "camera", "Entrance", "purple", "High-res recording", { on: true, automation: "Switched to high-res recording" });
-    this.dev("camera-yard", "Yard Camera", "camera", "Yard", "purple", "High-res recording", { on: true, automation: "Switched to high-res recording" });
-    this.dev("garage", "Garage Door", "garage", "Garage", "purple", "Locked", { locked: true, automation: "Garage secured" });
-    this.alert("purple", "Automation executed — home secured", "iot/auto", "Doors locked, lights on, cameras high-res, garage closed.");
+    this.dev("door-front", "Front Door", "lock", "Entrance", "purple", "Auto-locked", { locked: true, automation: "Door locked remotely" });
+    this.dev("camera-front", "Front Camera", "camera", "Entrance", "purple", "High-res recording", { on: true, automation: "Camera switched to high-res" });
+    this.dev("air-purifier", "Air Purifier", "purifier", "Living Room", "purple", "Boosted", { on: true, automation: "Air purifier boosted" });
+    this.dev("campfire", "Campfire", "extinguish", "Backyard", "purple", "Extinguished", { burning: false, automation: "Campfire extinguished by automation" });
+    this.alert("purple", "Automation executed — home secured", "iot/auto", "Doors locked, cameras high-res, air purifier boosted, campfire extinguished.");
     this.toast("PURPLE — automation actions taken", "purple");
   }
 
   private iotRecoverPhase(): void {
     this.dev("door-front", "Front Door", "lock", "Entrance", "green", "Locked", { locked: true });
-    this.dev("door-back", "Back Door", "lock", "Kitchen", "green", "Locked", { locked: true });
-    this.dev("light-living", "Living Light", "light", "Living Room", "green", "On", { on: true });
-    this.dev("light-bedroom", "Bedroom Light", "light", "Bedroom", "green", "Off", { on: false });
-    this.dev("light-porch", "Porch Light", "light", "Entrance", "green", "Off", { on: false });
-    this.dev("thermostat", "Thermostat", "thermostat", "Hallway", "green", "21°C · Heat");
-    this.dev("garage", "Garage Door", "garage", "Garage", "green", "Closed", { locked: true });
-    this.dev("motion-hall", "Hall Motion", "motion", "Hallway", "green", "Clear");
+    this.dev("camera-front", "Front Camera", "camera", "Entrance", "green", "Armed recording", { on: true });
+    this.dev("air-purifier", "Air Purifier", "purifier", "Living Room", "green", "On auto", { on: true });
+    this.dev("campfire", "Campfire", "extinguish", "Backyard", "green", "Burning", { burning: true });
     this.dev("motion-yard", "Yard Motion", "motion", "Yard", "green", "Clear");
-    this.dev("smoke-kitchen", "Kitchen Smoke", "smoke", "Kitchen", "green", "Clear");
-    this.dev("camera-front", "Front Camera", "camera", "Entrance", "green", "Armed · Recording", { on: true });
-    this.dev("camera-yard", "Yard Camera", "camera", "Yard", "green", "Armed · Recording", { on: true });
-    this.toast("All devices normal — GREEN", "green");
   }
 
   private clearTimers(): void {
@@ -125,18 +114,47 @@ export class Simulation {
     this.beatTimers = [];
     if (this.scoreTimer) window.clearInterval(this.scoreTimer);
     if (this.healthTimer) window.clearInterval(this.healthTimer);
+    if (this.chaosTimer) window.clearInterval(this.chaosTimer);
     this.scoreTimer = 0;
     this.healthTimer = 0;
+    this.chaosTimer = 0;
   }
 
+  private rainbow(): string {
+    this.hue = (this.hue + 3) % 360;
+    const h = this.hue;
+    return `hsl(${h},85%,62%)`;
+  }
+
+  private flash(msg: string, sev: string, big?: boolean): void {
+    this.toast(msg, sev);
+    if (big) {
+      // extra punch: queue another toast right after for a quick double-hit
+      setTimeout(() => this.toast(`+ ${sev.toUpperCase()}`, sev), 220);
+    }
+  }
+
+
   private scorePump = (): void => {
+    // Bouncy score: ease the score toward target with a little overshoot so
+    // the number and band feel alive instead of stair-stepping.
     const diff = this.target - this.score;
     if (diff !== 0) {
-      const step = Math.sign(diff) * Math.min(Math.abs(diff), Math.max(2, Math.ceil(Math.abs(diff) / 6)));
+      const abs = Math.abs(diff);
+      const step = Math.sign(diff) * Math.min(abs, Math.max(3, Math.ceil(abs / 5)));
       this.score = Math.max(0, Math.min(100, this.score + step));
       this.emit("score", { v: this.score });
       const band = bandForScore(this.score);
       if (band !== store.getState().band) this.emit("band", { b: band });
+      // small score-only jumps for liveliness even when target is steady
+      if (abs < 4 && Math.random() < 0.25) {
+        const jitter = Math.round(Math.random() * 6 - 3);
+        const next = Math.max(0, Math.min(100, this.score + jitter));
+        this.emit("score", { v: next });
+        if (bandForScore(next) !== store.getState().band) {
+          this.emit("band", { b: bandForScore(next) });
+        }
+      }
     }
   };
 
@@ -149,94 +167,191 @@ export class Simulation {
     }
   };
 
+  private chaosPump = (): void => {
+    if (!this.chaos) return;
+    // rapid fun: random device flips, random score pokes, random toasts.
+    const dev = store.getState().iot;
+    const ids = Object.keys(dev);
+    if (ids.length) {
+      const id = ids[Math.floor(Math.random() * ids.length)];
+      const sev = ["green", "yellow", "red", "purple"][Math.floor(Math.random() * 4)];
+      const row = dev[id];
+      const states: Record<string, string> = {
+        lock: sev === "green" ? "Locked" : sev === "yellow" ? "Ajar" : sev === "red" ? "Opened unexpectedly" : "Auto-locked",
+        camera: sev === "green" ? "Armed recording" : sev === "yellow" ? "Motion clip saved" : sev === "red" ? "Person detected" : "High-res recording",
+        purifier: sev === "green" ? "On auto" : sev === "yellow" ? "Filter low" : sev === "red" ? "Off" : "Boosted",
+        extinguish: sev === "green" ? "Burning" : sev === "yellow" ? "Waning" : sev === "red" ? "Smoldering" : "Extinguished",
+        motion: sev === "green" ? "Clear" : sev === "yellow" ? "Motion after hours" : sev === "red" ? "Person detected" : "Cleared",
+      };
+      const state = states[row?.kind as keyof typeof states] || "OK";
+      const extra: Record<string, unknown> = {};
+      if (sev === "purple") extra.automation = "Automation triggered";
+      if (row?.kind === "lock") extra.locked = sev === "green" || sev === "purple";
+      if (row?.kind === "camera" || row?.kind === "purifier") extra.on = sev !== "red";
+      if (row?.kind === "extinguish") extra.burning = sev === "green" || sev === "yellow";
+      this.dev(id, row?.name || id, row?.kind || "sensor", row?.room || "—", sev, state, extra);
+    }
+    // occasional score poke
+    if (Math.random() < 0.4) {
+      const jump = Math.round(Math.random() * 16 - 8);
+      this.target = Math.max(0, Math.min(100, this.target + jump));
+    }
+    // occasional funny toast
+    if (Math.random() < 0.3) {
+      const msgs = [
+        ["Chaos mode", "yellow"], ["Sensor funny", "info"], ["Something moved", "yellow"],
+        ["Auto-reacting", "purple"], ["Re-evaluating…", "info"], ["Still watching", "green"],
+      ];
+      const [msg, sev] = msgs[Math.floor(Math.random() * msgs.length)];
+      this.toast(msg, sev);
+    }
+  };
+
   private beats(): Beat[] {
     return [
+      // ---- boot: big splash ----
       { at: 0, run: () => {
-        this.toast("Simulation started — IoT demo feed", "info");
+        this.toast("Simulation started — let's make some noise", "info");
         this.cmd("/health");
         this.target = 10;
+        this.chaos = false;
         this.seedDevices();
+        // rainbow intro toasts
+        [", sensors warm", ", devices ready", ", watching…"].forEach((s, i) =>
+          setTimeout(() => this.toast("hello" + s, "green"), i * 260));
       } },
-      { at: 3000, run: () => {
-        this.dev("purifier", "Air Purifier", "purifier", "Living Room", "green", "On · Auto", { on: true });
-        this.dev("curtain", "Bedroom Curtain", "curtain", "Bedroom", "green", "Closed", { on: false });
+      { at: 2000, run: () => {
+        this.flash("GREEN baseline", "green", true);
       } },
-      { at: 5000, run: () => this.cmd("/latency") },
-      { at: 7000, run: () => {
-        this.dev("plug-coffee", "Coffee Plug", "plug", "Kitchen", "green", "On", { on: true });
-        this.alert("info", "Morning routine", "iot/auto", "Coffee plug ON · purifier auto · curtain closed");
-      } },
-      { at: 9000, run: () => { this.target = 18; } },
-      { at: 11000, run: () => {
+      { at: 4000, run: () => this.cmd("/latency") },
+
+      // ---- YELLOW ramp: fast, jittery ----
+      { at: 10000, run: () => {
         this.dev("motion-yard", "Yard Motion", "motion", "Yard", "yellow", "Motion detected");
-        this.toast("Yard motion sensor triggered", "yellow");
-      } },
-      { at: 13000, run: () => {
-        this.dev("thermostat", "Thermostat", "thermostat", "Hallway", "yellow", "23°C · Rising");
+        this.toast("Yard motion", "yellow");
         this.target = 32;
       } },
-      { at: 15000, run: () => {
-        this.dev("leak-utility", "Utility Leak", "leak", "Utility", "yellow", "Moisture detected");
-        this.alert("yellow", "Water leak under sink", "iot/leak-utility", "Moisture sensor triggered — utility room. Check plumbing.");
+      { at: 12000, run: () => {
+        this.target = 46;
+        this.flash("Score climbing — unusual activity", "yellow");
       } },
-      { at: 17000, run: () => {
-        this.dev("motion-hall", "Hall Motion", "motion", "Hallway", "yellow", "Motion after hours");
-        this.dev("camera-yard", "Yard Camera", "camera", "Yard", "yellow", "Motion clip saved", { on: true });
+      { at: 14000, run: () => {
+        this.alert("yellow", "Unusual activity — multiple sensors", "iot/motion-yard", "Yard motion and environmental sensors triggered outside the learned schedule.");
+        this.poke(6, "yellow");
       } },
-      { at: 21000, run: () => this.iotScenario() },
-      { at: 23000, run: () => this.cmd("/filter type:device") },
-      { at: 25000, run: () => {
+      { at: 16000, run: () => {
+        this.flash("Multiple sensors — review recommended", "yellow");
+      } },
+      { at: 18500, run: () => {
         this.target = 58;
-        this.dev("door-back", "Back Door", "lock", "Kitchen", "red", "Opened unexpectedly", { locked: false });
-        this.dev("camera-yard", "Yard Camera", "camera", "Yard", "red", "Person detected", { on: true });
+        this.flash("YELLOW settled — review recommended", "yellow", true);
       } },
-      { at: 27000, run: () => {
+
+      // ---- RED spike: sudden jumps ----
+      { at: 20000, run: () => {
+        this.target = 58;
+        this.flash("Intrusion pattern developing", "red");
+      } },
+      { at: 21500, run: () => {
+        this.target = 70;
+        this.dev("door-front", "Front Door", "lock", "Entrance", "red", "Opened unexpectedly", { locked: false });
+        this.dev("camera-front", "Front Camera", "camera", "Entrance", "red", "Person detected", { on: true });
+        this.dev("campfire", "Campfire", "extinguish", "Backyard", "red", "Smoldering");
         this.alert("red", "Intrusion alert — door + camera", "iot/door-front", "Front door opened + camera person detection. Alert dispatched to owner.");
-        this.iotAlertPhase();
+        this.flash("RED — alerts sent to owner", "red", true);
       } },
-      { at: 29000, run: () => this.toast("Band RED — posture degraded", "red") },
-      { at: 31000, run: () => this.cmd("/focus pi4") },
-      { at: 33000, run: () => {
-        this.dev("smoke-kitchen", "Kitchen Smoke", "smoke", "Kitchen", "red", "Smoke rising");
-        this.alert("red", "Kitchen smoke rising", "iot/smoke-kitchen", "Smoke density climbing — HVAC boosted, alerts paged.");
+      { at: 23500, run: () => {
+        this.target = 82;
+        this.flash("Score jumping — severe", "red");
       } },
-      { at: 35000, run: () => { this.target = 88; } },
-      { at: 37000, run: () => {
+      { at: 25000, run: () => this.cmd("/filter type:device") },
+      { at: 26500, run: () => this.cmd("/focus pi4") },
+      { at: 28000, run: () => {
+        this.target = 92;
+        this.flash("RED peak — posture degraded", "red", true);
+      } },
+
+      // ---- PURPLE swing: automation barrage ----
+      { at: 30000, run: () => {
+        this.target = 92;
         this.alert("purple", "Automation armed", "iot/auto", "Multi-sensor fusion: motion + door + camera → secure-home playbook.");
+        this.flash("Automation playbook firing", "purple");
       } },
-      { at: 39000, run: () => {
-        this.toast("PURPLE — escalation envelope", "purple");
-        this.iotAutomationPhase();
+      { at: 31500, run: () => {
+        this.dev("door-front", "Front Door", "lock", "Entrance", "purple", "Auto-locked", { locked: true, automation: "Door locked remotely" });
+        this.flash("Door locked", "purple");
       } },
-      { at: 41000, run: () => {
+      { at: 34500, run: () => {
+        this.dev("camera-front", "Front Camera", "camera", "Entrance", "purple", "High-res recording", { on: true, automation: "Camera switched to high-res" });
+        this.flash("Camera high-res", "purple");
+      } },
+      { at: 36000, run: () => {
+        this.dev("air-purifier", "Air Purifier", "purifier", "Living Room", "purple", "Boosted", { on: true, automation: "Air purifier boosted" });
+        this.dev("campfire", "Campfire", "extinguish", "Backyard", "purple", "Extinguished", { burning: false, automation: "Campfire extinguished by automation" });
+        this.alert("purple", "Automation executed — home secured", "iot/auto", "Door locked, camera high-res, air purifier boosted, campfire extinguished.");
+        this.flash("PURPLE — home secured", "purple", true);
+      } },
+      { at: 38000, run: () => this.cmd("/clear-filter") },
+
+      // ---- ACK the open alerts ----
+      { at: 39500, run: () => {
         const open = store.getState().alerts.find((a) => !a.ack);
         if (open) transport.sendAck(open.id);
+        this.toast("ACK — alert acknowledged", "green");
+      } },
+
+      // ---- chaos window: fast, fun, bouncy ----
+      { at: 41000, run: () => {
+        this.chaos = true;
+        this.flash("CHAOS — rapid sensor flips", "yellow");
       } },
       { at: 43000, run: () => this.toast("MQTT DEGRADED", "yellow") },
+      { at: 45000, run: () => this.toast("MQTT LIVE", "green") },
       { at: 47000, run: () => {
         this.silence = true;
-        this.alert("yellow", "Node pi3a heartbeat lost", "health/pi4", "No heartbeat from sensor node for 15s — tile will age");
+        this.alert("yellow", "Node pi3a heartbeat lost", "health/pi4", "No heartbeat from sensor node — tile will age.");
+        this.flash("pi3a silent", "yellow");
       } },
-      { at: 51000, run: () => this.cmd("/health") },
-      { at: 53000, run: () => { this.target = 55; } },
-      { at: 55000, run: () => this.toast("MQTT LIVE", "info") },
-      { at: 57000, run: () => this.cmd("/clear-filter") },
-      { at: 60000, run: () => this.iotRecoverPhase() },
+      { at: 49000, run: () => this.cmd("/health") },
+
+      // ---- pull back: dramatic decay ----
+      { at: 51000, run: () => {
+        this.target = 55;
+        this.flash("Pulling back — score easing", "yellow");
+      } },
+      { at: 54000, run: () => {
+        this.target = 30;
+        this.flash("Yellow → green transition", "green");
+      } },
+      { at: 57000, run: () => {
+        this.chaos = false;
+        this.silence = false;
+        this.target = 12;
+        this.flash("Calm restored", "green", true);
+      } },
+
+      // ---- GREEN recovery: full settle ----
+      { at: 60000, run: () => {
+        this.iotRecoverPhase();
+        this.flash("All devices normal — GREEN", "green", true);
+      } },
       { at: 63000, run: () => this.cmd("/history 6h") },
       { at: 65000, run: () => this.cmd("/latency") },
-      { at: 70000, run: () => {
+      { at: 67000, run: () => {
         for (const a of store.getState().alerts) {
           if (!a.ack) transport.sendAck(a.id);
         }
+        this.toast("All alerts acknowledged", "green");
       } },
-      { at: 80000, run: () => {
-        this.silence = false;
-        this.target = 6;
+      { at: 70000, run: () => this.cmd("/focus") },
+      { at: 73000, run: () => this.cmd("/help") },
+      { at: 76000, run: () => {
+        this.target = 5;
+        this.flash("Cycle complete — resting at GREEN", "green");
       } },
-      { at: 82000, run: () => this.cmd("/focus") },
-      { at: 86000, run: () => this.cmd("/help") },
-      { at: 88000, run: () => this.toast("Cycle complete — restarting demo", "info") },
-      { at: 91000, run: () => this.cmd("/history 24h") },
+      { at: 80000, run: () => this.cmd("/history 24h") },
+
+      // ---- restart the fun ----
       { at: CYCLE_MS, run: (c) => {
         this.cycle = c + 1;
         this.alertSeq = 0;
@@ -244,6 +359,7 @@ export class Simulation {
       } },
     ];
   }
+
 
   private scheduleCycle(): void {
     for (const b of this.beats()) {
@@ -256,17 +372,54 @@ export class Simulation {
   start(): void {
     if (this.running) return;
     this.running = true;
+    this.busBacked = false;
     this.cycle = 0;
     this.alertSeq = 0;
     this.target = 10;
     this.score = store.getState().score;
     this.silence = false;
+    this.chaos = false;
     this.startedAt = Date.now();
     store.setSimRunning(true);
+    if (transport.live) {
+      // Bus-backed tour: every envelope arrives from MQTT, exactly what the
+      // ESP32 panel renders. No local pumps, no beats.
+      this.busBacked = true;
+      transport.sendSim("start");
+      this.toast("SIM TOUR on the bus — dashboard + ESP32 in sync", "info");
+      this.startReconnectWatch();
+      return;
+    }
+    this.runLocal();
+  }
+
+  private startReconnectWatch(): void {
+    this.clearTimers();
+    this.reconnectTimer = window.setInterval(() => {
+      if (!this.running) { this.stopReconnectWatch(); return; }
+      if (transport.live) {
+        // still bus-backed, keep watching
+      } else {
+        // bus went down mid-tour — fall back to local simulation
+        this.toast("Bus down — switching to local simulation", "yellow");
+        this.runLocal();
+        this.stopReconnectWatch();
+      }
+    }, 2000);
+  }
+
+  private stopReconnectWatch(): void {
+    if (this.reconnectTimer) { window.clearInterval(this.reconnectTimer); this.reconnectTimer = 0; }
+  }
+
+  private runLocal(): void {
+    this.busBacked = false;
+    this.clearTimers();
     this.healthPump();
     this.scorePump();
     this.scoreTimer = window.setInterval(this.scorePump, SCORE_TICK_MS);
     this.healthTimer = window.setInterval(this.healthPump, HEALTH_TICK_MS);
+    this.chaosTimer = window.setInterval(this.chaosPump, 900);
     this.scheduleCycle();
   }
 
@@ -274,14 +427,42 @@ export class Simulation {
     if (!this.running) return;
     this.running = false;
     this.clearTimers();
+    this.stopReconnectWatch();
     this.silence = false;
+    this.chaos = false;
     store.setSimRunning(false);
+    if (transport.live) transport.sendSim("stop");
     this.toast("Simulation stopped", "info");
+  }
+
+  /** Enable extra liveliness: rapid sensor flips, random score pokes, rainbow-ish toasts. */
+  setChaos(on: boolean): void {
+    this.chaos = on;
+    this.toast(on ? "Chaos on — sensors jumping" : "Chaos off — calm", on ? "yellow" : "green");
   }
 
   toggle(): void {
     if (this.running) this.stop();
     else this.start();
+  }
+
+  /** Call when WS reconnects so a bus-backed tour can resume driving from the bus. */
+  onWsLive(): void {
+    if (!this.running) return;
+    if (this.busBacked) return; // already bus-backed
+    this.stopReconnectWatch();
+    this.clearTimers();
+    this.busBacked = true;
+    this.toast("Bus restored — simulation now bus-backed", "green");
+  }
+
+  /** Call when WS drops so we fall back to local simulation. */
+  onWsOffline(): void {
+    if (!this.running) return;
+    if (!this.busBacked) return; // already local
+    this.stopReconnectWatch();
+    this.toast("Bus lost — switching to local simulation", "yellow");
+    this.runLocal();
   }
 }
 

@@ -1,10 +1,11 @@
 """VoidMain dashboard web server (Pi4 — GOVERNANCE).
 
-Routes: /  /assets/*  /debug.html  /ws  /healthz  /auth/*
-(+ /favicon.ico and a SPA fallback — justified in use.md).
+Routes: /  /assets/*  /debug.html  /debug/triggers  /debug/trigger  /ws
+/healthz  /ai/ask  /auth/* (+ /favicon.ico and a SPA fallback — justified in use.md).
 
 Serves the built React app, bridges MQTT<->/ws, replays history + acked alerts
-on join, handles ACK and clock-sync control frames. Never writes voidmain/risk/#.
+on join, handles ACK, SIM-tour triggers and clock-sync control frames. Never
+writes voidmain/risk/# (the SIM trigger goes out on voidmain/sim/# only).
 WebSocket upgrade requires valid session + Origin header.
 
 TLS: when VOIDMAIN_TLS_CERT + VOIDMAIN_TLS_KEY are set, serves HTTPS on
@@ -27,7 +28,7 @@ from pathlib import Path
 
 from aiohttp import WSMsgType, web
 
-from . import clock, csp, db
+from . import clock, csp, db, rag, triggers
 from .auth import add_auth_routes
 from .auth_db import AuthDB
 from .bridge import Bridge, Hub, envelope
@@ -128,6 +129,128 @@ async def handle_debug(request: web.Request) -> web.Response:
     return csp.apply(resp, policy)
 
 
+async def handle_debug_triggers(request: web.Request) -> web.Response:
+    """Button catalogue for debug.html — session-gated, read-only."""
+    if not _ws_session(request):
+        raise web.HTTPUnauthorized(text="Valid session required")
+    return web.json_response(triggers.catalogue(),
+                             headers={"Cache-Control": "no-store"})
+
+
+async def handle_debug_trigger(request: web.Request) -> web.Response:
+    """Relay one demo trigger onto voidmain/sim/<id> (session-gated).
+
+    The server never writes voidmain/risk/#: the dev-only director executes the
+    trigger, so dashboard, debug console and ESP32 OLED all show one stream.
+    """
+    if not _ws_session(request):
+        raise web.HTTPUnauthorized(text="Valid session required")
+    try:
+        body = await request.json()
+    except ValueError:
+        raise web.HTTPBadRequest(text="JSON body required")
+    if not isinstance(body, dict):
+        raise web.HTTPBadRequest(text="JSON object body required")
+    tid = str(body.get("id", ""))[:64]
+    ok, reason = triggers.validate(tid, body.get("v"), body.get("s"))
+    if not ok:
+        raise web.HTTPBadRequest(text=reason)
+    payload: dict = {"ts": int(time.time()), "op": "debug"}
+    if tid.startswith("preset/") or body.get("v") is not None:
+        payload["v"] = body.get("v") if body.get("v") is not None else None
+    if body.get("s") is not None:
+        payload["s"] = body["s"]
+    bridge: Bridge = request.app["bridge"]
+    if not await bridge.publish_sim(tid, payload):
+        raise web.HTTPServiceUnavailable(text="MQTT bridge offline")
+    LOG.debug("trigger %s -> voidmain/sim/%s", tid, tid)
+    return web.json_response({"ok": True, "topic": f"voidmain/sim/{tid}"})
+
+
+async def handle_ai_ask(request: web.Request) -> web.Response:
+    """Console assistant: BM25 over the repo docs + local Ollama (zero cloud).
+
+    Always answers: model mode when Ollama replies, otherwise a labelled
+    retrieval-only answer. Session-gated like /ws so only signed-in operators
+    can spend model time.
+    """
+    if not _ws_session(request):
+        raise web.HTTPUnauthorized(text="Valid session required")
+    cfg: Config = request.app["cfg"]
+    if not cfg.ai_enabled:
+        raise web.HTTPNotFound(text="assistant disabled (VOIDMAIN_AI=0)")
+    try:
+        body = await request.json()
+    except ValueError:
+        raise web.HTTPBadRequest(text="JSON body required")
+    query = " ".join(str(body.get("q", "")).split())[:500]
+    if not query:
+        raise web.HTTPBadRequest(text="missing q")
+
+    # live dashboard state, so answers reflect what is on screen right now
+    hist = await db.read_history(cfg.evidence_db)
+    alerts = await db.read_recent_alerts(cfg.evidence_db)
+    bridge: Bridge = request.app["bridge"]
+    score = hist[-1][1] if hist else None
+    live: dict = {
+        "score": score,
+        "band": triggers.band_for_score(score) if score is not None else None,
+        "mqtt": bridge.connected,
+        "ws_clients": request.app["hub"].count,
+        "uptime_s": round(time.monotonic() - _START, 1),
+        "open_alerts": [f"{a['sev']}: {a['title']}" for a in alerts if not a["ack"]][:3],
+    }
+    out = await asyncio.to_thread(
+        rag.ask, query, live,
+        ollama_url=cfg.ollama_url, model=cfg.ai_model, timeout=cfg.ai_timeout,
+    )
+    return web.json_response(out, headers={"Cache-Control": "no-store"})
+
+
+async def handle_ai_models(request: web.Request) -> web.Response:
+    """Lightweight liveness hint for the AI console: which model is available.
+
+    Cheap GET so the panel can show a correct status dot without spending model
+    time, and without a prompt. Still session-gated.
+    """
+    if not _ws_session(request):
+        raise web.HTTPUnauthorized(text="Valid session required")
+    cfg: Config = request.app["cfg"]
+    if not cfg.ai_enabled:
+        raise web.HTTPNotFound(text="assistant disabled (VOIDMAIN_AI=0)")
+    models = await asyncio.to_thread(rag.list_models, cfg.ollama_url)
+    active = any(m.get("name") == cfg.ai_model for m in models)
+    return web.json_response({
+        "enabled": cfg.ai_enabled,
+        "model": cfg.ai_model,
+        "active": active,
+        "models": models,
+    }, headers={"Cache-Control": "no-store"})
+
+
+async def handle_alerts(request: web.Request) -> web.Response:
+    """Phone-friendly alert feed: all recent alerts, session-gated, cached 2s."""
+    if not _ws_session(request):
+        raise web.HTTPUnauthorized(text="Valid session required")
+    cfg: Config = request.app["cfg"]
+    alerts = await db.read_recent_alerts(cfg.evidence_db)
+    return web.json_response({"alerts": alerts, "count": len(alerts)},
+                             headers={"Cache-Control": "public, max-age=2"})
+
+
+async def handle_alerts_page(request: web.Request) -> web.Response:
+    """Phone-friendly standalone alerts page — session-gated."""
+    if not _ws_session(request):
+        raise web.HTTPUnauthorized(text="Valid session required")
+    page = request.app.get("alerts_page")
+    if page is None:
+        raise web.HTTPNotFound(text="alerts.html missing")
+    body, policy = page
+    resp = web.Response(text=body, content_type="text/html", charset="utf-8")
+    resp.headers["Cache-Control"] = "no-store"
+    return csp.apply(resp, policy)
+
+
 async def handle_healthz(request: web.Request) -> web.Response:
     app = request.app
     cfg: Config = app["cfg"]
@@ -221,6 +344,17 @@ async def handle_ws(request: web.Request) -> web.WebSocketResponse:
                 await send(envelope("toast", {
                     "msg": f"ACK {'sent' if ok else 'queued'}: {aid}",
                     "sev": "green" if ok else "yellow"}))
+                continue
+            # SIM TOUR trigger — relayed to voidmain/sim/* so the dev feed runs
+            # the tour on the bus: dashboard + ESP32 panel move together.
+            sim = ctrl.get("sim")
+            if sim:
+                action = str(sim)
+                ok = await bridge.publish_sim(action)
+                await send(envelope("toast", {
+                    "msg": (f"SIM TOUR {'started' if action == 'start' else 'stopped'} on the bus"
+                            if ok else f"SIM trigger {action} — MQTT bridge offline"),
+                    "sev": "green" if ok else "yellow"}))
     finally:
         session_mgr.untrack(sid_hash, ws)
         hub.remove(ws)
@@ -233,6 +367,13 @@ async def handle_ws(request: web.Request) -> web.WebSocketResponse:
 # --------------------------------------------------------------------------- #
 async def _on_startup(app: web.Application) -> None:
     app["bridge_task"] = asyncio.create_task(app["bridge"].run())
+    cfg: Config = app["cfg"]
+    if cfg.ai_enabled and cfg.ai_warm:
+        # load the local model now so the first demo question is ~2s, not ~45s
+        asyncio.get_running_loop().run_in_executor(
+            None, rag.warm_up, cfg.ollama_url, cfg.ai_model)
+    # give the console a correct status dot early — cheap, no model time
+    asyncio.get_running_loop().run_in_executor(None, rag.list_models, cfg.ollama_url)
 
 
 async def _on_cleanup(app: web.Application) -> None:
@@ -262,6 +403,7 @@ def create_app(cfg: Config | None = None) -> web.Application:
     app["auth_rp_name"] = cfg.rp_name
     app["auth_origins"] = cfg.origins
     app["auth_secure_cookies"] = cfg.tls_enabled
+    app["demo_code"] = cfg.demo_code
     app["google_client_id"] = cfg.google_client_id
     app["owner_emails"] = cfg.owner_emails
     session_mgr = SessionWsManager()
@@ -284,10 +426,27 @@ def create_app(cfg: Config | None = None) -> web.Application:
     LOG.info("dist=%s (exists=%s) version=%s tls=%s",
              cfg.dist_dir, cfg.dist_dir.exists(), cfg.version, cfg.tls_enabled)
 
+    # phone-friendly alert feed page
+    if cfg.alerts_html.exists():
+        alerts_html = cfg.alerts_html.read_text(encoding="utf-8")
+        app["alerts_page"] = (
+            alerts_html,
+            csp.build_csp_for_html(alerts_html, tls=cfg.tls_enabled, rp_id=cfg.rp_id, https_port=cfg.https_port),
+        )
+        LOG.info("alerts.html loaded from %s", cfg.alerts_html)
+    else:
+        app["alerts_page"] = None
+
     app.add_routes([
         web.get("/ws", handle_ws),
         web.get("/healthz", handle_healthz),
+        web.get("/alerts", handle_alerts_page),
+        web.get("/alerts.json", handle_alerts),
         web.get("/debug.html", handle_debug),
+        web.get("/debug/triggers", handle_debug_triggers),
+        web.post("/debug/trigger", handle_debug_trigger),
+        web.post("/ai/ask", handle_ai_ask),
+        web.get("/ai/models", handle_ai_models),
         web.get("/favicon.ico", handle_favicon),
         web.get("/assets/{tail:.*}", handle_asset),
         web.get("/", handle_index),

@@ -6,9 +6,12 @@ dev-safe defaults so the same tree runs on a laptop and on the Pi4.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+
+LOG = logging.getLogger("voidmain.config")
 
 VERSION = "0.5.0-phase1"
 
@@ -48,9 +51,25 @@ class Config:
     mqtt_user: str = os.environ.get("VOIDMAIN_MQTT_USER", "dash")
     mqtt_pass: str = os.environ.get("VOIDMAIN_MQTT_PASS", "")
 
-    evidence_db: Path = Path(os.environ.get("VOIDMAIN_EVIDENCE_DB", "/mnt/pendrive/voidmain/voidmain.db"))
+    # Evidence log. Dev-safe default lives in the tree so a laptop gets history
+    # + ACK replay; on the Pi4 set VOIDMAIN_EVIDENCE_DB=/mnt/pendrive/…
+    evidence_db: Path = Path(os.environ.get(
+        "VOIDMAIN_EVIDENCE_DB", str(_DASHBOARD_DIR / "evidence.db")))
+
+    # 3-laptop demo rig: allow non-localhost http origins (VOIDMAIN_ORIGINS with
+    # the laptop's LAN IP) and enable POST /auth/demo with a shared code.
+    allow_lan: bool = _b("VOIDMAIN_ALLOW_LAN", False)
+    demo_code: str = os.environ.get("VOIDMAIN_DEMO_CODE", "")
+
+    # Console assistant — local only (BM25 over the repo docs + Ollama).
+    ai_enabled: bool = _b("VOIDMAIN_AI", True)
+    ollama_url: str = os.environ.get("VOIDMAIN_OLLAMA_URL", "http://127.0.0.1:11434")
+    ai_model: str = os.environ.get("VOIDMAIN_AI_MODEL", "qwen3:8b")
+    ai_timeout: float = float(os.environ.get("VOIDMAIN_AI_TIMEOUT", "60"))
+    ai_warm: bool = _b("VOIDMAIN_AI_WARM", False)
     dist_dir: Path = field(default_factory=_default_dist)
     debug_html: Path = field(default_factory=_default_debug_html)
+    alerts_html: Path = field(default_factory=lambda: _DASHBOARD_DIR / "alerts.html")
 
     # /debug.html gating: enabled globally, or only from the mgmt subnet with basic auth.
     debug_enabled: bool = _b("VOIDMAIN_DEBUG", False)
@@ -111,10 +130,14 @@ def _validate(cfg: "Config") -> None:
         parsed = _url.urlparse(origin)
         if parsed.scheme == "http" and parsed.hostname not in (
             "localhost", "127.0.0.1", "::1",
-        ):
+        ) and not cfg.allow_lan:
             raise ConfigError(
-                f"VOIDMAIN_ORIGINS contains non-localhost http:// origin: {origin}"
+                f"VOIDMAIN_ORIGINS contains non-localhost http:// origin: {origin} "
+                "(set VOIDMAIN_ALLOW_LAN=1 for the LAN demo rig)"
             )
+    if cfg.allow_lan and not cfg.demo_code:
+        LOG.warning("VOIDMAIN_ALLOW_LAN=1 without VOIDMAIN_DEMO_CODE — "
+                    "LAN browsers can watch but cannot sign in (passkeys are pinned to rp_id)")
 
     if cfg.debug_enabled:
         if cfg.rp_id not in ("localhost", "127.0.0.1", "::1"):
