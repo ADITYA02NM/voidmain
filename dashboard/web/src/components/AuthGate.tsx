@@ -17,6 +17,7 @@ function AuthLayout({ children }: { children: React.ReactNode }) {
     if (skipBusy) return;
     setSkipBusy(true);
     try {
+      localStorage.setItem("voidmain_skip_auth", "true");
       await skipRegistration();
     } catch (e) {
       console.warn("Skip registration backend call failed, falling back to demo state:", e);
@@ -169,8 +170,31 @@ export function AuthGate({ children }: { children?: React.ReactNode }) {
   const phase = useStore((s) => s.authPhase);
 
   useEffect(() => {
-    checkAuth().then((s) => store.setAuth(s.authenticated, s.has_owner))
-      .catch(() => store.setAuth(false, false));
+    checkAuth()
+      .then(async (s) => {
+        if (!s.authenticated && localStorage.getItem("voidmain_skip_auth") === "true") {
+          try {
+            await skipRegistration();
+            store.setAuth(true, true);
+            return;
+          } catch {
+            localStorage.removeItem("voidmain_skip_auth");
+          }
+        }
+        store.setAuth(s.authenticated, s.has_owner);
+      })
+      .catch(async () => {
+        if (localStorage.getItem("voidmain_skip_auth") === "true") {
+          try {
+            await skipRegistration();
+            store.setAuth(true, true);
+            return;
+          } catch {
+            localStorage.removeItem("voidmain_skip_auth");
+          }
+        }
+        store.setAuth(false, false);
+      });
   }, []);
 
   if (phase === "checking") return <CheckingScreen />;

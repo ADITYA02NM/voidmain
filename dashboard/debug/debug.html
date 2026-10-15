@@ -183,13 +183,14 @@ button.btn-purple:hover { background: var(--purple); color: #000; }
   <div class="group">
     <div class="group-title">1 · Stage Story Peaks (Minecraft Demo Rig)</div>
     <div class="btn-row">
-      <button id="trig-full" class="hero btn-purple">▶ FULL TOUR (Continuous Loop)</button>
+      <button id="trig-full" class="hero btn-purple">▶ FULL TOUR (60s Loop)</button>
       <button id="trig-hold" class="hero btn-yellow">⏸ PAUSE / HOLD SIM</button>
       <button id="trig-resume" class="hero btn-green">▶ RESUME TOUR</button>
-      <button id="trig-green" class="hero btn-green">● GREEN Baseline (Score 10)</button>
-      <button id="trig-yellow" class="hero btn-yellow">▲ YELLOW Anomaly (Score 45 · Perimeter + Filter + Haze)</button>
-      <button id="trig-red" class="hero btn-red">■ RED Intrusion Peak (Score 76 · Door Breach + Camera + Smoke)</button>
-      <button id="trig-purple" class="hero btn-purple">◆ PURPLE Automation Peak (Score 92 · Auto-Locked + Fire Suppression)</button>
+      <button id="trig-reset" class="hero">↺ RESET BASELINE</button>
+      <button id="trig-green" class="hero btn-green">● GREEN Baseline (Score 6)</button>
+      <button id="trig-yellow" class="hero btn-yellow">▲ YELLOW Anomaly (Score 45)</button>
+      <button id="trig-red" class="hero btn-red">■ RED Intrusion Peak (Score 78)</button>
+      <button id="trig-purple" class="hero btn-purple">◆ PURPLE Automation Peak (Score 92)</button>
       <button id="trig-ack" class="hero">✓ ACK Last Alert</button>
     </div>
   </div>
@@ -433,6 +434,7 @@ button.btn-purple:hover { background: var(--purple); color: #000; }
   document.getElementById("trig-full").onclick = function() { fire("preset/full-tour"); };
   document.getElementById("trig-hold").onclick = function() { fire("stop"); log("SIMULATION PAUSED / HELD", true); };
   document.getElementById("trig-resume").onclick = function() { fire("start"); log("SIMULATION RESUMED", true); };
+  document.getElementById("trig-reset").onclick = function() { fire("reset"); log("SIMULATION RESET TO BASELINE", true); };
   document.getElementById("trig-green").onclick = function() { fire("preset/green-warm"); };
   document.getElementById("trig-yellow").onclick = function() { fire("preset/yellow-motion"); };
   document.getElementById("trig-red").onclick = function() { fire("preset/red-intrusion"); };

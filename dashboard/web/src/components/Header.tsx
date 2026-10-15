@@ -14,6 +14,7 @@ function HeaderImpl() {
   const band = useStore((s) => s.band);
   const bump = useStore((s) => s.bandBump);
   const simRunning = useStore((s) => s.simRunning);
+  const simPaused = useStore((s) => s.simPaused);
   const [clock, setClock] = useState(utcClock());
   const headRef = useRef<HTMLElement>(null);
 
@@ -53,13 +54,32 @@ function HeaderImpl() {
       <div className="pill">{band}</div>
       <div className="clock">{clock} UTC</div>
       <div className="tag">MONITOR</div>
-      <button
-        className={"sim-btn" + (simRunning ? " running" : "")}
-        title={simRunning ? "Stop the demo simulation" : "Run the client-side demo simulation"}
-        onClick={() => simulation.toggle()}
-      >
-        {simRunning ? "■ STOP" : "▶ SIM TOUR"}
-      </button>
+      {simRunning ? (
+        <>
+          <button
+            className={"sim-btn" + (simPaused ? " paused" : " running")}
+            title={simPaused ? "Resume simulation" : "Pause / hold simulation (graphs remain live)"}
+            onClick={() => (simPaused ? simulation.resume() : simulation.pause())}
+          >
+            {simPaused ? "▶ RESUME" : "■ STOP"}
+          </button>
+          <button
+            className="sim-btn reset"
+            title="Reset simulation to baseline"
+            onClick={() => simulation.reset()}
+          >
+            ↺ RESET
+          </button>
+        </>
+      ) : (
+        <button
+          className="sim-btn"
+          title="Run the demo simulation"
+          onClick={() => simulation.start()}
+        >
+          ▶ SIM TOUR
+        </button>
+      )}
       <button className="session-chip" title="Sign out" onClick={() => { transport.stop(); logout(); }}>SIGN OUT</button>
     </header>
   );

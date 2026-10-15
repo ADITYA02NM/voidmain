@@ -124,7 +124,7 @@ def _set_session_cookie(
     resp.set_cookie(
         SESSION_COOKIE, sid,
         max_age=SESSION_TTL, httponly=True,
-        samesite="Strict", secure=secure, path="/",
+        samesite="Lax", secure=secure, path="/",
     )
 
 

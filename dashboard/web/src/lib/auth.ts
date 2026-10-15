@@ -80,6 +80,7 @@ export async function loginComplete(credential: Credential): Promise<void> {
 }
 
 export async function logout(): Promise<void> {
+  localStorage.removeItem("voidmain_skip_auth");
   await fetch("/auth/logout", { method: "POST" });
   store.setAuth(false, true);
 }

@@ -93,6 +93,7 @@ export interface State {
   eventFilter: string;
   showDevices: boolean;
   simRunning: boolean;
+  simPaused: boolean;
   selectedDevice: string | null;
   historyRange: "1h" | "6h" | "24h";
 }
@@ -111,7 +112,7 @@ function initial(): State {
     pipeline: { detect: 0, govern: 0, alert: 0 },
     latencyLast: 0, latencyP95: 0, clockReady: false, clockUncertaintyMs: Infinity, lastToast: null,
     events: [], devices: {}, iot: {}, commandHistory: [], muteUntil: 0, focusNode: null, eventFilter: "all", showDevices: false,
-    simRunning: false, selectedDevice: null, historyRange: "24h",
+    simRunning: false, simPaused: false, selectedDevice: null, historyRange: "24h",
   };
 }
 
@@ -196,6 +197,42 @@ export class Store {
   setSimRunning(v: boolean): void {
     if (this.state.simRunning === v) return;
     this.state = { ...this.state, simRunning: v };
+    this.emit();
+  }
+
+  setSimPaused(v: boolean): void {
+    if (this.state.simPaused === v) return;
+    this.state = { ...this.state, simPaused: v };
+    this.emit();
+  }
+
+  resetSimState(): void {
+    const iot = { ...this.state.iot };
+    for (const id of Object.keys(iot)) {
+      const d = iot[id];
+      if (d) {
+        iot[id] = {
+          ...d,
+          sev: "green",
+          state: d.kind === "lock" ? "Locked" : d.kind === "camera" ? "Armed recording" : d.kind === "purifier" ? "On auto" : d.kind === "extinguish" ? "Burning" : "Clear",
+          locked: d.kind === "lock" ? true : d.locked,
+          on: (d.kind === "camera" || d.kind === "purifier") ? true : d.on,
+          burning: d.kind === "extinguish" ? true : d.burning,
+          automation: undefined,
+        };
+      }
+    }
+    const alerts = this.state.alerts.map((a) => ({ ...a, ack: true, ack_ts: Math.floor(Date.now() / 1000) }));
+    this.state = {
+      ...this.state,
+      score: 6,
+      band: "GREEN",
+      simRunning: false,
+      simPaused: false,
+      openCount: 0,
+      iot,
+      alerts,
+    };
     this.emit();
   }
 

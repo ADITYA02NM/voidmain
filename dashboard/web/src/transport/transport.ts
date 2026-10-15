@@ -42,7 +42,7 @@ export class Transport {
 
   // SIM TOUR relay: the server forwards this to voidmain/sim/* and the dev
   // feed publishes the tour, so the bus drives dashboard + ESP32 together.
-  sendSim(action: "start" | "stop"): void {
+  sendSim(action: "start" | "stop" | string): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ sim: action }));
     }

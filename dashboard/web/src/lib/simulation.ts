@@ -15,7 +15,7 @@ import { execCommand } from "./commands";
 import { store } from "../store/store";
 import { transport } from "../transport/transport";
 
-const CYCLE_MS = 92000;
+const CYCLE_MS = 60000;
 const SCORE_TICK_MS = 1000;
 const HEALTH_TICK_MS = 4000;
 
@@ -61,55 +61,13 @@ export class Simulation {
     this.emit("device", { id, name, kind, room, sev, state, ...extra } as never);
   }
 
-  private poke(scoreJump?: number, sev?: string): void {
-    if (scoreJump != null) {
-      this.target = Math.max(0, Math.min(100, this.target + scoreJump));
-    }
-    if (sev) this.toast(`poke → ${sev}`, sev);
-  }
-
   private seedDevices(): void {
     this.dev("smoke-detector", "Smoke Detector", "smoke", "Kitchen", "green", "Clear");
     this.dev("campfire", "Campfire", "extinguish", "Backyard", "green", "Burning", { burning: true });
     this.dev("air-purifier", "Air Purifier", "purifier", "Living Room", "green", "On auto", { on: true });
     this.dev("door-front", "Front Door", "lock", "Entrance", "green", "Locked", { locked: true });
     this.dev("camera-front", "Front Camera", "camera", "Entrance", "green", "Armed recording", { on: true });
-    this.dev("motion-yard", "Yard Motion", "motion", "Yard", "green", "Clear");
-  }
-
-  private iotScenario(): void {
-    this.dev("motion-yard", "Yard Motion", "motion", "Yard", "yellow", "Motion after hours");
-    this.alert("yellow", "Unusual motion detected", "iot/motion-yard", "Yard motion triggered — no one home");
-    this.toast("YELLOW — unusual activity", "yellow");
-  }
-
-  private iotAlertPhase(): void {
-    this.dev("door-front", "Front Door", "lock", "Entrance", "red", "Opened unexpectedly", { locked: false });
-    this.dev("camera-front", "Front Camera", "camera", "Entrance", "red", "Person detected", { on: true });
-    this.dev("campfire", "Campfire", "extinguish", "Backyard", "red", "Smoldering");
-    this.dev("smoke-detector", "Smoke Detector", "smoke", "Kitchen", "red", "Smoke alarm");
-    this.alert("red", "Intrusion alert — door + camera", "iot/door-front", "Front door opened + camera person detection. Alert dispatched to owner.");
-    this.toast("RED — alerts sent to owner", "red");
-    this.target = 70;
-  }
-
-  private iotAutomationPhase(): void {
-    this.dev("door-front", "Front Door", "lock", "Entrance", "purple", "Auto-locked", { locked: true, automation: "Door locked remotely" });
-    this.dev("camera-front", "Front Camera", "camera", "Entrance", "purple", "High-res recording", { on: true, automation: "Camera switched to high-res" });
-    this.dev("air-purifier", "Air Purifier", "purifier", "Living Room", "purple", "Boosted", { on: true, automation: "Air purifier boosted" });
-    this.dev("campfire", "Campfire", "extinguish", "Backyard", "purple", "Extinguished", { burning: false, automation: "Campfire extinguished by automation" });
-    this.dev("smoke-detector", "Smoke Detector", "smoke", "Kitchen", "purple", "HVAC boost", { automation: "HVAC boosted for smoke clearance" });
-    this.alert("purple", "Automation executed — home secured", "iot/auto", "Doors locked, cameras high-res, air purifier boosted, campfire extinguished, HVAC boosted.");
-    this.toast("PURPLE — automation actions taken", "purple");
-  }
-
-  private iotRecoverPhase(): void {
-    this.dev("door-front", "Front Door", "lock", "Entrance", "green", "Locked", { locked: true });
-    this.dev("camera-front", "Front Camera", "camera", "Entrance", "green", "Armed recording", { on: true });
-    this.dev("air-purifier", "Air Purifier", "purifier", "Living Room", "green", "On auto", { on: true });
-    this.dev("campfire", "Campfire", "extinguish", "Backyard", "green", "Burning", { burning: true });
-    this.dev("smoke-detector", "Smoke Detector", "smoke", "Kitchen", "green", "Clear");
-    this.dev("motion-yard", "Yard Motion", "motion", "Yard", "green", "Clear");
+    this.dev("perimeter", "Perimeter Sensor", "perimeter", "Yard", "green", "Clear");
   }
 
   private clearTimers(): void {
@@ -207,142 +165,108 @@ export class Simulation {
 
   private beats(): Beat[] {
     return [
-      // ---- boot: big splash ----
+      // ---- [0:00 - 0:08] GREEN baseline (8s) ----
       { at: 0, run: () => {
-        this.toast("Simulation started — let's make some noise", "info");
+        this.toast("Simulation started — monitoring facility baseline", "info");
         this.cmd("/health");
-        this.target = 10;
+        this.target = 6;
         this.chaos = false;
         this.seedDevices();
-        // rainbow intro toasts
-        [", sensors warm", ", devices ready", ", watching…"].forEach((s, i) =>
-          setTimeout(() => this.toast("hello" + s, "green"), i * 260));
       } },
       { at: 2000, run: () => {
-        this.flash("GREEN baseline", "green", true);
+        this.flash("GREEN baseline — all systems nominal", "green", true);
       } },
       { at: 4000, run: () => this.cmd("/latency") },
 
-      // ---- YELLOW ramp: fast, jittery ----
-      { at: 10000, run: () => {
-        this.iotScenario();
-        this.target = 32;
+      // ---- [0:08 - 0:20] YELLOW Anomaly Stage (12s) ----
+      { at: 8000, run: () => {
+        this.dev("perimeter", "Perimeter Sensor", "perimeter", "Yard", "yellow", "Motion after hours (02:14 AM)");
+        this.toast("Perimeter tripwire active (02:14 AM)", "yellow");
       } },
-      { at: 12000, run: () => {
-        this.target = 46;
+      { at: 10000, run: () => {
+        this.dev("air-purifier", "Air Purifier", "purifier", "Living Room", "yellow", "Particulate spike / Filter warning", { on: true });
+      } },
+      { at: 11500, run: () => {
+        this.dev("smoke-detector", "Smoke Detector", "smoke", "Kitchen", "yellow", "Haze detected in kitchen");
+      } },
+      { at: 12500, run: () => {
+        this.alert("yellow", "Unusual activity — perimeter motion + environmental drift", "iot/perimeter-yard", "Perimeter tripwire triggered at 02:14. Air purifier and smoke detector report early haze.");
+        this.target = 45;
         this.flash("Score climbing — unusual activity", "yellow");
       } },
-      { at: 14000, run: () => {
-        this.alert("yellow", "Unusual activity — multiple sensors", "iot/motion-yard", "Yard motion and environmental sensors triggered outside the learned schedule.");
-        this.poke(6, "yellow");
-      } },
       { at: 16000, run: () => {
-        this.flash("Multiple sensors — review recommended", "yellow");
-      } },
-      { at: 18500, run: () => {
-        this.target = 58;
         this.flash("YELLOW settled — review recommended", "yellow", true);
       } },
 
-      // ---- RED spike: sudden jumps ----
+      // ---- [0:20 - 0:36] RED Intrusion Peak Stage (16s) ----
       { at: 20000, run: () => {
-        this.target = 58;
+        this.dev("perimeter", "Perimeter Sensor", "perimeter", "Yard", "red", "Perimeter breached");
         this.flash("Intrusion pattern developing", "red");
       } },
       { at: 21500, run: () => {
-        this.iotAlertPhase();
-        this.flash("RED — alerts sent to owner", "red", true);
+        this.dev("door-front", "Front Door", "lock", "Entrance", "red", "Opened unexpectedly", { locked: false });
+      } },
+      { at: 22500, run: () => {
+        this.dev("camera-front", "Front Camera", "camera", "Entrance", "red", "Person detected", { on: true });
       } },
       { at: 23500, run: () => {
-        this.target = 82;
-        this.flash("Score jumping — severe", "red");
+        this.dev("campfire", "Campfire", "extinguish", "Backyard", "red", "Smoldering unattended", { burning: true });
       } },
-      { at: 25000, run: () => this.cmd("/filter type:device") },
-      { at: 26500, run: () => this.cmd("/focus pi4") },
-      { at: 28000, run: () => {
-        this.target = 92;
-        this.flash("RED peak — posture degraded", "red", true);
+      { at: 24500, run: () => {
+        this.dev("smoke-detector", "Smoke Detector", "smoke", "Kitchen", "red", "Smoke alarm sounding");
       } },
+      { at: 25500, run: () => {
+        this.alert("red", "CRITICAL Intrusion — perimeter breached, front door forced, person detected", "iot/door-front", "Front door opened unexpectedly, camera detected unauthorized person, perimeter breached, kitchen smoke alarm sounding. Dispatched alert to Elena Vance.");
+        this.target = 78;
+        this.flash("RED peak — intrusion detected", "red", true);
+      } },
+      { at: 30000, run: () => this.cmd("/filter type:device") },
+      { at: 32000, run: () => this.cmd("/focus pi4") },
 
-      // ---- PURPLE swing: automation barrage ----
-      { at: 30000, run: () => {
-        this.target = 92;
-        this.alert("purple", "Automation armed", "iot/auto", "Multi-sensor fusion: motion + door + camera → secure-home playbook.");
-        this.flash("Automation playbook firing", "purple");
-      } },
-      { at: 31500, run: () => {
-        this.dev("door-front", "Front Door", "lock", "Entrance", "purple", "Auto-locked", { locked: true, automation: "Door locked remotely" });
-        this.flash("Door locked", "purple");
-      } },
-      { at: 34500, run: () => {
-        this.dev("camera-front", "Front Camera", "camera", "Entrance", "purple", "High-res recording", { on: true, automation: "Camera switched to high-res" });
-        this.flash("Camera high-res", "purple");
-      } },
+      // ---- [0:36 - 0:50] PURPLE Autonomous Lockdown Stage (14s) ----
       { at: 36000, run: () => {
-        this.iotAutomationPhase();
-        this.flash("PURPLE — home secured", "purple", true);
+        this.dev("door-front", "Front Door", "lock", "Entrance", "purple", "Auto-locked", { locked: true, automation: "Autonomous remote deadbolt engaged" });
+        this.flash("Door auto-locked in 180ms", "purple");
       } },
-      { at: 38000, run: () => this.cmd("/clear-filter") },
+      { at: 37000, run: () => {
+        this.dev("camera-front", "Front Camera", "camera", "Entrance", "purple", "High-res recording", { on: true, automation: "Camera switched to 4K evidence capture" });
+      } },
+      { at: 38000, run: () => {
+        this.dev("air-purifier", "Air Purifier", "purifier", "Living Room", "purple", "Boosted", { on: true, automation: "Air scrubber overdrive engaged" });
+      } },
+      { at: 39000, run: () => {
+        this.dev("campfire", "Campfire", "extinguish", "Backyard", "purple", "Extinguished", { burning: false, automation: "Sprinkler automation extinguished fire" });
+      } },
+      { at: 40000, run: () => {
+        this.dev("perimeter", "Perimeter Sensor", "perimeter", "Yard", "purple", "Perimeter secured", { automation: "Zone isolation active" });
+        this.dev("smoke-detector", "Smoke Detector", "smoke", "Kitchen", "purple", "Suppression active", { automation: "Halon / mist suppression active" });
+      } },
+      { at: 42000, run: () => {
+        this.alert("purple", "Autonomous policy executed — home secured in 180ms", "iot/auto", "Door locked remotely, 4K camera engaged, air purifier boosted, fire suppressed, perimeter isolated. False alarm probability: 0.02%.");
+        this.target = 92;
+        this.flash("PURPLE — home secured in 180ms", "purple", true);
+      } },
+      { at: 46000, run: () => this.cmd("/clear-filter") },
 
-      // ---- ACK the open alerts ----
-      { at: 39500, run: () => {
-        const open = store.getState().alerts.find((a) => !a.ack);
-        if (open) transport.sendAck(open.id);
-        this.toast("ACK — alert acknowledged", "green");
+      // ---- [0:50 - 1:00] Smooth Decay & Recovery (10s) ----
+      { at: 50000, run: () => {
+        this.target = 6;
+        this.flash("Pulling back — posture recovering", "green");
       } },
-
-      // ---- chaos window: fast, fun, bouncy ----
-      { at: 41000, run: () => {
-        this.chaos = true;
-        this.flash("CHAOS — rapid sensor flips", "yellow");
-      } },
-      { at: 43000, run: () => this.toast("MQTT DEGRADED", "yellow") },
-      { at: 45000, run: () => this.toast("MQTT LIVE", "green") },
-      { at: 47000, run: () => {
-        this.silence = true;
-        this.alert("yellow", "Node pi3a heartbeat lost", "health/pi4", "No heartbeat from sensor node — tile will age.");
-        this.flash("pi3a silent", "yellow");
-      } },
-      { at: 49000, run: () => this.cmd("/health") },
-
-      // ---- pull back: dramatic decay ----
-      { at: 51000, run: () => {
-        this.target = 55;
-        this.flash("Pulling back — score easing", "yellow");
-      } },
-      { at: 54000, run: () => {
-        this.target = 30;
-        this.flash("Yellow → green transition", "green");
-      } },
-      { at: 57000, run: () => {
-        this.chaos = false;
-        this.silence = false;
-        this.target = 12;
-        this.flash("Calm restored", "green", true);
-      } },
-
-      // ---- GREEN recovery: full settle ----
-      { at: 60000, run: () => {
-        this.iotRecoverPhase();
-        this.flash("All devices normal — GREEN", "green", true);
-      } },
-      { at: 63000, run: () => this.cmd("/history 6h") },
-      { at: 65000, run: () => this.cmd("/latency") },
-      { at: 67000, run: () => {
+      { at: 55000, run: () => {
+        this.dev("door-front", "Front Door", "lock", "Entrance", "green", "Locked", { locked: true });
+        this.dev("camera-front", "Front Camera", "camera", "Entrance", "green", "Armed recording", { on: true });
+        this.dev("air-purifier", "Air Purifier", "purifier", "Living Room", "green", "On auto", { on: true });
+        this.dev("campfire", "Campfire", "extinguish", "Backyard", "green", "Burning", { burning: true });
+        this.dev("perimeter", "Perimeter Sensor", "perimeter", "Yard", "green", "Clear");
+        this.dev("smoke-detector", "Smoke Detector", "smoke", "Kitchen", "green", "Clear");
         for (const a of store.getState().alerts) {
           if (!a.ack) transport.sendAck(a.id);
         }
-        this.toast("All alerts acknowledged", "green");
+        this.flash("All devices normal — GREEN recovery", "green", true);
       } },
-      { at: 70000, run: () => this.cmd("/focus") },
-      { at: 73000, run: () => this.cmd("/help") },
-      { at: 76000, run: () => {
-        this.target = 5;
-        this.flash("Cycle complete — resting at GREEN", "green");
-      } },
-      { at: 80000, run: () => this.cmd("/history 24h") },
 
-      // ---- restart the fun ----
+      // ---- restart the 60s continuous loop ----
       { at: CYCLE_MS, run: (c) => {
         this.cycle = c + 1;
         this.alertSeq = 0;
@@ -350,7 +274,6 @@ export class Simulation {
       } },
     ];
   }
-
 
   private scheduleCycle(): void {
     for (const b of this.beats()) {
@@ -361,27 +284,56 @@ export class Simulation {
   }
 
   start(): void {
-    if (this.running) return;
+    if (this.running) {
+      if (store.getState().simPaused) {
+        this.resume();
+      }
+      return;
+    }
     this.running = true;
     this.busBacked = false;
     this.cycle = 0;
     this.alertSeq = 0;
-    this.target = 10;
-    this.score = store.getState().score;
+    this.target = 6;
+    this.score = store.getState().score || 6;
     this.silence = false;
     this.chaos = false;
     this.startedAt = Date.now();
     store.setSimRunning(true);
+    store.setSimPaused(false);
     if (transport.live) {
-      // Bus-backed tour: every envelope arrives from MQTT, exactly what the
-      // ESP32 panel renders. No local pumps, no beats.
       this.busBacked = true;
       transport.sendSim("start");
-      this.toast("SIM TOUR on the bus — dashboard + ESP32 in sync", "info");
+      this.toast("SIM TOUR started on bus — dashboard + ESP32 in sync", "info");
       this.startReconnectWatch();
       return;
     }
     this.runLocal();
+  }
+
+  pause(): void {
+    if (!this.running || store.getState().simPaused) return;
+    store.setSimPaused(true);
+    if (transport.live) transport.sendSim("pause");
+    this.toast("Simulation paused / held — graphs live", "yellow");
+  }
+
+  resume(): void {
+    if (!this.running || !store.getState().simPaused) return;
+    store.setSimPaused(false);
+    if (transport.live) transport.sendSim("resume");
+    this.toast("Simulation resumed", "green");
+  }
+
+  reset(): void {
+    this.running = false;
+    this.clearTimers();
+    this.stopReconnectWatch();
+    this.silence = false;
+    this.chaos = false;
+    store.resetSimState();
+    if (transport.live) transport.sendSim("reset");
+    this.toast("Simulation reset to baseline", "info");
   }
 
   private startReconnectWatch(): void {
@@ -422,6 +374,7 @@ export class Simulation {
     this.silence = false;
     this.chaos = false;
     store.setSimRunning(false);
+    store.setSimPaused(false);
     if (transport.live) transport.sendSim("stop");
     this.toast("Simulation stopped", "info");
   }

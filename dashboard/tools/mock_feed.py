@@ -109,12 +109,25 @@ class Feed:
         if tid in ("start", "resume"):
             self._paused = False
             self._start.set()
+            self._stop.clear()
             print("  [sim] STARTED / RESUMED")
         elif tid in ("stop", "pause"):
-            self._paused = not self._paused
+            self._paused = not getattr(self, "_paused", False)
             print(f"  [sim] HOLD / PAUSE -> {self._paused}")
+        elif tid == "reset":
+            print("  [sim] RESET to baseline")
+            self._paused = False
+            self._stop.set()
+            self._start.clear()
+            self.seed_devices()
+            self.health()
+            self.risk(6)
+            for aid in list(self._alerts.keys()):
+                self.apply_ack({"id": aid})
         elif tid == "abort":
             self._stop.set()
+            self._start.clear()
+            print("  [sim] ABORTED")
         else:
             self.dispatch(tid, data)
 
@@ -399,60 +412,90 @@ class Feed:
             self.pub(f"voidmain/device/{dev['id']}", device_payload(dev["id"], "green", ts))
 
     def iot_scenario(self) -> None:
-        print("  IoT YELLOW — unusual activity")
-        self.device("perimeter", "Perimeter Sensor", "perimeter", "Yard", "yellow", "Motion after hours")
-        self.device("air-purifier", "Air Purifier", "purifier", "Living Room", "yellow", "Filter low")
-        self.device("smoke-detector", "Smoke Detector", "smoke", "Kitchen", "yellow", "Haze detected")
-        self.alert("iot-yellow-1", "yellow", "Unusual activity detected",
-                   "iot/perimeter-yard", "Perimeter sensor triggered at 02:14 — no one home.")
-        if self.ramp_risk(45, steps=8, step_time=0.3):
+        # ---- Phase 2: YELLOW Anomaly Stage (12.0s) ----
+        print("  [0:08 - 0:20] IoT YELLOW — unusual activity (12s)")
+        self.device("perimeter", "Perimeter Sensor", "perimeter", "Yard", "yellow", "Motion after hours (02:14 AM)")
+        if self.pause(2.0):
             return
-        if self.pause(5.0):
+        self.device("air-purifier", "Air Purifier", "purifier", "Living Room", "yellow", "Particulate spike / Filter warning")
+        if self.pause(1.5):
+            return
+        self.device("smoke-detector", "Smoke Detector", "smoke", "Kitchen", "yellow", "Haze detected in kitchen")
+        if self.pause(1.0):
+            return
+        self.alert("iot-yellow-1", "yellow", "Unusual activity — perimeter motion + environmental drift",
+                   "iot/perimeter-yard", "Perimeter sensor triggered at 02:14 — no one home. Air purifier and smoke detector report early haze.")
+        if self.ramp_risk(45, steps=10, step_time=0.35):
+            return
+        if self.pause(4.0):
             return
 
-        print("  IoT RED — intrusion peak alert")
-        self.device("door-front", "Front Door", "lock", "Entrance", "red", "Opened unexpectedly", locked=False)
-        self.device("camera-front", "Front Camera", "camera", "Entrance", "red", "Person detected", on=True)
-        self.device("campfire", "Campfire", "extinguish", "Backyard", "red", "Smoldering")
+        # ---- Phase 3: RED Intrusion Peak Stage (16.0s) ----
+        print("  [0:20 - 0:36] IoT RED — intrusion peak alert (16s)")
         self.device("perimeter", "Perimeter Sensor", "perimeter", "Yard", "red", "Perimeter breached")
+        if self.pause(1.5):
+            return
+        self.device("door-front", "Front Door", "lock", "Entrance", "red", "Opened unexpectedly", locked=False)
+        if self.pause(1.0):
+            return
+        self.device("camera-front", "Front Camera", "camera", "Entrance", "red", "Person detected", on=True)
+        if self.pause(1.0):
+            return
+        self.device("campfire", "Campfire", "extinguish", "Backyard", "red", "Smoldering unattended", burning=True)
+        if self.pause(1.0):
+            return
         self.device("smoke-detector", "Smoke Detector", "smoke", "Kitchen", "red", "Smoke alarm sounding")
-        self.alert("iot-red-1", "red", "Intrusion alert — door + camera + perimeter + smoke",
-                   "iot/door-front", "Front door opened + camera person detection + smoke alarm. Alert sent to owner.")
-        if self.ramp_risk(76, steps=10, step_time=0.3):
+        if self.pause(1.0):
             return
-        if self.pause(6.0):
+        self.alert("iot-red-1", "red", "CRITICAL Intrusion — perimeter breached, front door forced, person detected",
+                   "iot/door-front", "Front door opened unexpectedly, camera detected unauthorized person, perimeter breached, kitchen smoke alarm sounding. Dispatched alert to Elena Vance.")
+        if self.ramp_risk(78, steps=11, step_time=0.4):
+            return
+        if self.pause(6.1):
             return
 
-        print("  IoT PURPLE — automation peak executed")
+        # ---- Phase 4: PURPLE Autonomous Lockdown Stage (14.0s) ----
+        print("  [0:36 - 0:50] IoT PURPLE — autonomous lockdown (14s)")
         self.device("door-front", "Front Door", "lock", "Entrance", "purple", "Auto-locked",
-                    locked=True, automation="Door locked remotely")
-        self.device("camera-front", "Front Camera", "camera", "Entrance", "purple", "High-res recording",
-                    on=True, automation="Camera switched to high-res")
-        self.device("air-purifier", "Air Purifier", "purifier", "Living Room", "purple", "Boosted",
-                    on=True, automation="Air purifier boosted")
-        self.device("campfire", "Campfire", "extinguish", "Backyard", "purple", "Extinguished",
-                    burning=False, automation="Campfire extinguished by automation")
-        self.device("perimeter", "Perimeter Sensor", "perimeter", "Yard", "purple", "Perimeter secured",
-                    automation="Perimeter integrity restored")
-        self.device("smoke-detector", "Smoke Detector", "smoke", "Kitchen", "purple", "Suppression active",
-                    automation="Fire suppression deployed")
-        self.alert("iot-purple-1", "purple", "Automation executed — home secured",
-                   "iot/auto", "Door locked, camera high-res, air purifier boosted, campfire extinguished, suppression deployed.")
-        if self.ramp_risk(92, steps=6, step_time=0.35):
+                    locked=True, automation="Autonomous remote deadbolt engaged")
+        if self.pause(1.0):
             return
-        if self.pause(6.0):
+        self.device("camera-front", "Front Camera", "camera", "Entrance", "purple", "High-res recording",
+                    on=True, automation="Camera switched to 4K evidence capture")
+        if self.pause(1.0):
+            return
+        self.device("air-purifier", "Air Purifier", "purifier", "Living Room", "purple", "Boosted",
+                    on=True, automation="Air scrubber overdrive engaged")
+        if self.pause(1.0):
+            return
+        self.device("campfire", "Campfire", "extinguish", "Backyard", "purple", "Extinguished",
+                    burning=False, automation="Sprinkler automation extinguished fire")
+        if self.pause(1.0):
+            return
+        self.device("perimeter", "Perimeter Sensor", "perimeter", "Yard", "purple", "Perimeter secured",
+                    automation="Zone isolation active")
+        self.device("smoke-detector", "Smoke Detector", "smoke", "Kitchen", "purple", "Suppression active",
+                    automation="Halon / mist suppression active")
+        self.alert("iot-purple-1", "purple", "Autonomous policy executed — home secured in 180ms",
+                   "iot/auto", "Door locked remotely, 4K camera engaged, air purifier boosted, fire suppressed, perimeter isolated. False alarm probability: 0.02%.")
+        if self.ramp_risk(92, steps=8, step_time=0.35):
+            return
+        if self.pause(6.2):
             return
 
-        print("  IoT GREEN — recovery")
+        # ---- Phase 5: Smooth Decay & Recovery (10.0s) ----
+        print("  [0:50 - 1:00] IoT GREEN — smooth recovery (10s)")
+        if self.ramp_risk(6, steps=14, step_time=0.35):
+            return
         self.device("door-front", "Front Door", "lock", "Entrance", "green", "Locked", locked=True)
         self.device("camera-front", "Front Camera", "camera", "Entrance", "green", "Armed recording", on=True)
         self.device("air-purifier", "Air Purifier", "purifier", "Living Room", "green", "On auto", on=True)
         self.device("campfire", "Campfire", "extinguish", "Backyard", "green", "Burning", burning=True)
         self.device("perimeter", "Perimeter Sensor", "perimeter", "Yard", "green", "Clear")
         self.device("smoke-detector", "Smoke Detector", "smoke", "Kitchen", "green", "Clear")
-        if self.ramp_risk(8, steps=14, step_time=0.35):
-            return
-        if self.pause(5.0):
+        for aid in list(self._alerts.keys()):
+            self.apply_ack({"id": aid})
+        if self.pause(5.1):
             return
 
     def stop(self) -> None:
@@ -461,20 +504,18 @@ class Feed:
 
 
 def run(feed: Feed) -> None:
-    """One full GREEN -> YELLOW -> RED -> PURPLE -> GREEN tour."""
-    print("\n[1] quiet GREEN — seed all IoT devices")
+    """One full 60-second GREEN -> YELLOW -> RED -> PURPLE -> GREEN demo arc."""
+    print("\n[0:00 - 0:08] Quiet GREEN baseline — seed all 6 IoT devices (8s)")
     feed.seed_devices()
     feed.health()
     feed.risk(6)
-    if feed.pause(4.0):
+    if feed.pause(8.0):
         return
 
-    print("\n[2] IoT scenario: yellow -> red -> purple -> green")
     feed.iot_scenario()
     if feed.aborted():
         return
 
-    print("\n[3] tour complete — return to quiet GREEN")
     feed.health()
     feed.risk(6)
 
@@ -486,18 +527,50 @@ def baseline(feed: Feed) -> None:
 
 
 def run_forever(feed: Feed, auto: bool) -> None:
-    """Continuous demo tour loop with pause/hold capability."""
+    """Continuous demo tour loop with pause/hold and reset capability."""
     print("  [director] starting continuous demo simulation loop...")
-    feed.trigger_start()
+    if auto:
+        feed.trigger_start()
+    else:
+        print("  [director] idling at GREEN baseline until voidmain/sim/start...")
+        feed.seed_devices()
+        feed.health()
+        feed.risk(6)
+
+    cycle_count = 0
     while True:
+        # If not started, idle at baseline
+        while not feed.take_start():
+            time.sleep(1.0)
+            feed.health()
+            feed.risk(getattr(feed, "_score", 6))
+            if feed.aborted():
+                feed._stop.clear()
+
+        cycle_count += 1
+        print(f"\n  [director] === Starting 60s scenario cycle #{cycle_count} ===")
+        was_aborted = False
         try:
             run(feed)
+            was_aborted = feed.aborted()
         except Exception as e:
             print(f"  [error] in run: {e}")
         finally:
             feed._stop.clear()
+
+        if was_aborted:
+            print("  [director] tour was reset/aborted — resting at GREEN baseline")
+            feed.seed_devices()
+            feed.health()
+            feed.risk(6)
+            continue
+
+        print(f"  [director] === Completed cycle #{cycle_count} — looping continuously ===")
         # Brief pause between loop iterations at GREEN baseline (respects pause/hold)
-        feed.pause(4.0)
+        if feed.pause(2.0):
+            feed._stop.clear()
+            continue
+        feed.trigger_start()
 
 
 def main() -> None:

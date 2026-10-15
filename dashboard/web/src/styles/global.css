@@ -108,6 +108,9 @@ header {
 }
 .sim-btn:hover { border-color: var(--accent); }
 .sim-btn.running { color: var(--bg); background: var(--red); border-color: var(--red); }
+.sim-btn.paused { color: var(--yellow); background: var(--yellow-tint); border-color: var(--yellow); }
+.sim-btn.reset { color: var(--text); background: var(--panel-2); border-color: var(--border-2); }
+.sim-btn.reset:hover { border-color: var(--text); }
 
 /* header escalation sweep */
 .sweep::after {
