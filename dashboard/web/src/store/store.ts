@@ -207,31 +207,45 @@ export class Store {
   }
 
   resetSimState(): void {
-    const iot = { ...this.state.iot };
-    for (const id of Object.keys(iot)) {
-      const d = iot[id];
-      if (d) {
-        iot[id] = {
-          ...d,
-          sev: "green",
-          state: d.kind === "lock" ? "Locked" : d.kind === "camera" ? "Armed recording" : d.kind === "purifier" ? "On auto" : d.kind === "extinguish" ? "Burning" : "Clear",
-          locked: d.kind === "lock" ? true : d.locked,
-          on: (d.kind === "camera" || d.kind === "purifier") ? true : d.on,
-          burning: d.kind === "extinguish" ? true : d.burning,
-          automation: undefined,
-        };
-      }
+    const ts = Math.floor(Date.now() / 1000);
+    const iot: Record<string, IoTDevice> = {
+      ...this.state.iot,
+      "door-front": { id: "door-front", name: "Front Door", kind: "lock", room: "Entrance", sev: "green", state: "Locked", locked: true, lastSeen: ts },
+      "camera-front": { id: "camera-front", name: "Front Camera", kind: "camera", room: "Entrance", sev: "green", state: "Armed recording", on: true, lastSeen: ts },
+      "air-purifier": { id: "air-purifier", name: "Air Purifier", kind: "purifier", room: "Living Room", sev: "green", state: "On auto", on: true, lastSeen: ts },
+      "campfire": { id: "campfire", name: "Campfire", kind: "extinguish", room: "Backyard", sev: "green", state: "Burning", burning: true, lastSeen: ts },
+      "perimeter": { id: "perimeter", name: "Perimeter Sensor", kind: "perimeter", room: "Yard", sev: "green", state: "Clear", lastSeen: ts },
+      "smoke-detector": { id: "smoke-detector", name: "Smoke Detector", kind: "smoke", room: "Kitchen", sev: "green", state: "Clear", lastSeen: ts },
+    };
+    const alerts = this.state.alerts.map((a) => ({ ...a, ack: true, ack_ts: ts }));
+    const nodes = { ...this.state.nodes };
+    for (const node of ["pi4", "pi3a", "pi3b", "esp32"]) {
+      nodes[node] = { up: 3600, lastSeen: ts };
     }
-    const alerts = this.state.alerts.map((a) => ({ ...a, ack: true, ack_ts: Math.floor(Date.now() / 1000) }));
+    const events = this.state.events.slice();
+    this.pushEvent({
+      id: nextEvId(),
+      ts,
+      kind: "band",
+      node: "governance",
+      sev: "green",
+      summary: "Board reset in its entirety — baseline GREEN",
+      derived: true,
+    }, events);
     this.state = {
       ...this.state,
       score: 6,
+      scoreTs: ts,
       band: "GREEN",
+      bandBump: 0,
       simRunning: false,
       simPaused: false,
       openCount: 0,
       iot,
       alerts,
+      nodes,
+      events,
+      lastToast: { msg: "Board reset in its entirety — baseline GREEN", sev: "green", at: Date.now() },
     };
     this.emit();
   }

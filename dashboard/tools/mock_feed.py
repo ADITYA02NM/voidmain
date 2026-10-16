@@ -112,8 +112,8 @@ class Feed:
             self._stop.clear()
             print("  [sim] STARTED / RESUMED")
         elif tid in ("stop", "pause"):
-            self._paused = not getattr(self, "_paused", False)
-            print(f"  [sim] HOLD / PAUSE -> {self._paused}")
+            self._paused = True
+            print("  [sim] HOLD / PAUSE -> True")
         elif tid == "reset":
             print("  [sim] RESET to baseline")
             self._paused = False
@@ -172,6 +172,23 @@ class Feed:
         self._seq += 1
 
         # preset sequences: one press, whole colour story.
+        if tid in ("pause", "stop"):
+            print("  [dispatch] pause / hold")
+            self.health()
+            self.risk(getattr(self, "_score", 6))
+            return
+        if tid in ("resume", "start"):
+            print("  [dispatch] resume / start")
+            self.health()
+            self.risk(getattr(self, "_score", 6))
+            return
+        if tid == "reset":
+            print("  [dispatch] reset to baseline")
+            self.seed_devices()
+            self.health()
+            self.risk(6)
+            return
+
         if tid == "preset/green-warm":
             print("  [preset] green-warm: score 10, devices GREEN, nodes up")
             self.risk(10)
@@ -318,17 +335,24 @@ class Feed:
     # ---- tour control (stop holds/pauses, start resumes) ----
     def pause(self, seconds: float) -> bool:
         """Sleep; respects pause/hold while keeping heartbeats and risk active."""
-        end = time.time() + seconds
-        while time.time() < end:
+        remaining = float(seconds)
+        last_t = time.time()
+        while remaining > 0:
             if self._stop.is_set():
                 return True
             while getattr(self, "_paused", False):
-                time.sleep(1.0)
+                time.sleep(0.5)
                 self.health()
-                self.risk(getattr(self, "_score", 10))
+                self.risk(getattr(self, "_score", 6))
+                last_t = time.time()  # freeze remaining countdown while paused!
                 if self._stop.is_set():
                     return True
-            time.sleep(min(0.2, max(0.02, end - time.time())))
+            now = time.time()
+            elapsed = now - last_t
+            last_t = now
+            remaining -= elapsed
+            if remaining > 0:
+                time.sleep(min(0.1, remaining))
         return False
 
     def aborted(self) -> bool:
@@ -372,7 +396,7 @@ class Feed:
         self.pub("voidmain/sim/esp32-led", {"led": band.lower(), "ts": int(time.time())}, retain=True)
 
     def ramp_risk(self, target: int, steps: int = 8, step_time: float = 0.3) -> bool:
-        cur = getattr(self, "_score", 10)
+        cur = getattr(self, "_score", 6)
         target = max(0, min(100, target))
         if cur == target:
             return False
@@ -381,7 +405,7 @@ class Feed:
             if self.aborted():
                 return True
             while getattr(self, "_paused", False):
-                time.sleep(1.0)
+                time.sleep(0.5)
                 self.health()
                 self.risk(getattr(self, "_score", cur))
                 if self.aborted():

@@ -180,6 +180,9 @@ EDGE_EVENTS: dict[str, dict] = {
 TRIGGERS: tuple[dict, ...] = (
     {"id": "start", "group": "story", "label": "Run scripted tour"},
     {"id": "stop", "group": "story", "label": "Stop scripted tour"},
+    {"id": "pause", "group": "story", "label": "Pause / hold tour"},
+    {"id": "resume", "group": "story", "label": "Resume tour"},
+    {"id": "reset", "group": "story", "label": "Reset tour to baseline"},
     {"id": "score", "group": "score", "label": "Set risk score"},
     {"id": "alert", "group": "alert", "label": "New alert"},
     {"id": "alert-intrusion", "group": "alert", "label": "Intrusion alert"},

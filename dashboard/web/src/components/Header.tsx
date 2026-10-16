@@ -55,22 +55,13 @@ function HeaderImpl() {
       <div className="clock">{clock} UTC</div>
       <div className="tag">MONITOR</div>
       {simRunning ? (
-        <>
-          <button
-            className={"sim-btn" + (simPaused ? " paused" : " running")}
-            title={simPaused ? "Resume simulation" : "Pause / hold simulation (graphs remain live)"}
-            onClick={() => (simPaused ? simulation.resume() : simulation.pause())}
-          >
-            {simPaused ? "▶ RESUME" : "■ STOP"}
-          </button>
-          <button
-            className="sim-btn reset"
-            title="Reset simulation to baseline"
-            onClick={() => simulation.reset()}
-          >
-            ↺ RESET
-          </button>
-        </>
+        <button
+          className={"sim-btn" + (simPaused ? " paused" : " running")}
+          title={simPaused ? "Resume simulation" : "Pause / hold simulation (graphs remain live)"}
+          onClick={() => (simPaused ? simulation.resume() : simulation.pause())}
+        >
+          {simPaused ? "▶ RESUME" : "■ STOP"}
+        </button>
       ) : (
         <button
           className="sim-btn"
@@ -80,6 +71,13 @@ function HeaderImpl() {
           ▶ SIM TOUR
         </button>
       )}
+      <button
+        className="sim-btn reset"
+        title="Reset board in its entirety to baseline GREEN"
+        onClick={() => simulation.reset()}
+      >
+        ↺ RESET
+      </button>
       <button className="session-chip" title="Sign out" onClick={() => { transport.stop(); logout(); }}>SIGN OUT</button>
     </header>
   );

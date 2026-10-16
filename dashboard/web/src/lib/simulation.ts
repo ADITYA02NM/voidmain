@@ -91,6 +91,7 @@ export class Simulation {
 
 
   private scorePump = (): void => {
+    if (store.getState().simPaused) return;
     // Bouncy score: ease the score toward target with a little overshoot so
     // the number and band feel alive instead of stair-stepping.
     const diff = this.target - this.score;
@@ -123,7 +124,7 @@ export class Simulation {
   };
 
   private chaosPump = (): void => {
-    if (!this.chaos) return;
+    if (!this.chaos || store.getState().simPaused) return;
     // rapid fun: random device flips, random score pokes, random toasts.
     const dev = store.getState().iot;
     const ids = Object.keys(dev);
@@ -278,7 +279,7 @@ export class Simulation {
   private scheduleCycle(): void {
     for (const b of this.beats()) {
       this.beatTimers.push(setTimeout(() => {
-        if (this.running) b.run(this.cycle);
+        if (this.running && !store.getState().simPaused) b.run(this.cycle);
       }, b.at) as unknown as number);
     }
   }
@@ -314,14 +315,20 @@ export class Simulation {
   pause(): void {
     if (!this.running || store.getState().simPaused) return;
     store.setSimPaused(true);
-    if (transport.live) transport.sendSim("pause");
+    if (transport.live) {
+      transport.sendSim("pause");
+      transport.sendSim("stop");
+    }
     this.toast("Simulation paused / held — graphs live", "yellow");
   }
 
   resume(): void {
     if (!this.running || !store.getState().simPaused) return;
     store.setSimPaused(false);
-    if (transport.live) transport.sendSim("resume");
+    if (transport.live) {
+      transport.sendSim("resume");
+      transport.sendSim("start");
+    }
     this.toast("Simulation resumed", "green");
   }
 
