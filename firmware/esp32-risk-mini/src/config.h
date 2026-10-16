@@ -5,7 +5,7 @@
 #define WIFI_PASSWORD "farlands@2026"
 
 // MQTT broker = laptop's wlan0 IP (Farlands LAN); mosquitto listens on 0.0.0.0:1883
-#define MQTT_HOST "10.10.8.97"
+#define MQTT_HOST "130.1.31.115"
 #define MQTT_PORT 1883
 #define MQTT_CLIENT_ID "voidmain-esp32-mini"
 
