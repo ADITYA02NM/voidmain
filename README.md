@@ -22,19 +22,23 @@
     <img src="media/win.jpeg" alt="VoidMain — click to play the demo" width="72%"/>
   </a>
   <br/>
-  <b>▶︎ <a href="https://github.com/ADITYA02NM/voidmain/releases/download/v0.5.0/demo.mp4">Play the demo</a></b>
-  &nbsp;·&nbsp; 88 s &nbsp;·&nbsp; GREEN → YELLOW → RED → PURPLE → recovery
+  <b>▶︎ <a href="https://github.com/ADITYA02NM/voidmain/releases/download/v0.5.0/demo.mp4">Play the full demo (88 s)</a></b>
+  &nbsp;·&nbsp; GREEN → YELLOW → RED → PURPLE → recovery
 </p>
 
-<!-- GitHub renders <video> only when the src is an absolute URL on its own CDN,
-     so the player points at the release asset (relative paths are stripped). -->
-<video src="https://github.com/ADITYA02NM/voidmain/releases/download/v0.5.0/demo.mp4"
-       poster="https://raw.githubusercontent.com/ADITYA02NM/voidmain/main/media/win.jpeg"
-       controls preload="metadata" width="480"></video>
+<!-- GitHub's README renderer strips <video> tags in repo context (no host is
+     allow-listed), so the inline player below is an animated GIF derived from
+     media/demo.mp4 — 8x speed, ~11 s, 89 frames. Click it for the full clip. -->
+<p align="center">
+  <a href="media/demo.mp4" title="Play the full 88 s demo">
+    <img src="media/demo.gif" alt="VoidMain demo — phone approval, live dashboard, ESP32 NeoPixel" width="300"/>
+  </a>
+</p>
 
 | Asset | Link |
 |---|---|
 | 🎬 Demo video (88 s, MP4) | [play](https://github.com/ADITYA02NM/voidmain/releases/download/v0.5.0/demo.mp4) · [in repo](media/demo.mp4) |
+| 🎞️ Inline preview (11 s GIF) | [media/demo.gif](media/demo.gif) |
 | 🖼️ Result screenshot | [media/win.jpeg](media/win.jpeg) |
 | 📑 Slide deck (7 pages) | [docs/DECK.pdf](docs/DECK.pdf) |
 | 📦 Release notes | [v0.5.0](https://github.com/ADITYA02NM/voidmain/releases/tag/v0.5.0) |
