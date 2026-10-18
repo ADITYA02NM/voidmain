@@ -5,21 +5,49 @@
       <stop offset="55%" stop-color="#0D0B1A"/>
       <stop offset="100%" stop-color="#120A22"/>
     </linearGradient>
+
+    <!-- volt: vector animated for a slow sheen across the wordmark -->
     <linearGradient id="volt" x1="0" y1="0" x2="1" y2="0">
+      <animate attributeName="x1" values="-0.7;0.1;-0.7" dur="7s" repeatCount="indefinite"/>
+      <animate attributeName="x2" values="0.3;1.1;0.3" dur="7s" repeatCount="indefinite"/>
       <stop offset="0%" stop-color="#8A2BE2"/>
       <stop offset="100%" stop-color="#14E0C8"/>
     </linearGradient>
+
     <linearGradient id="glow" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#8A2BE2" stop-opacity="0.35"/>
       <stop offset="100%" stop-color="#14E0C8" stop-opacity="0"/>
     </linearGradient>
+
+    <linearGradient id="sweep" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#14E0C8" stop-opacity="0"/>
+      <stop offset="50%" stop-color="#14E0C8" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#8A2BE2" stop-opacity="0"/>
+    </linearGradient>
+
     <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
       <path d="M40 0H0V40" fill="none" stroke="#8A2BE2" stroke-opacity="0.08" stroke-width="1"/>
     </pattern>
+
     <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
       <feGaussianBlur stdDeviation="6" result="b"/>
       <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
+
+    <!-- shared dash-flow animation, applied by reference to every link -->
+    <style>
+      .pkt { fill: none; stroke: #14E0C8; stroke-width: 2; stroke-linecap: round;
+             stroke-dasharray: 7 21; stroke-opacity: 0.85;
+             animation: vmflow 1.7s linear infinite; }
+      @keyframes vmflow { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -28; } }
+      .node { animation: vmbeat 3.2s ease-in-out infinite; transform-box: fill-box;
+              transform-origin: center; }
+      @keyframes vmbeat { 0%, 100% { transform: scale(1); opacity: 0.75; }
+                          50%      { transform: scale(1.45); opacity: 1; } }
+      @media (prefers-reduced-motion: reduce) {
+        .pkt, .node { animation: none; }
+      }
+    </style>
   </defs>
 
   <rect width="1200" height="400" fill="url(#bg)"/>
@@ -38,19 +66,47 @@
     <line x1="900" y1="220" x2="980" y2="330"/>
     <line x1="460" y1="320" x2="240" y2="300"/>
   </g>
-  <g fill="#14E0C8">
-    <circle cx="120" cy="80" r="5"/>
-    <circle cx="300" cy="150" r="5"/>
-    <circle cx="240" cy="300" r="5"/>
-    <circle cx="480" cy="90" r="5"/>
-    <circle cx="460" cy="320" r="5"/>
-    <circle cx="760" cy="120" r="5"/>
-    <circle cx="900" cy="220" r="5"/>
-    <circle cx="1060" cy="110" r="5"/>
-    <circle cx="980" cy="330" r="5"/>
+
+  <!-- travelling packets: the same links, lit by a flowing dash -->
+  <g class="pkt">
+    <line x1="120" y1="80" x2="300" y2="150"/>
+    <line x1="300" y1="150" x2="240" y2="300"/>
+    <line x1="300" y1="150" x2="480" y2="90"/>
+    <line x1="480" y1="90" x2="600" y2="200"/>
+    <line x1="600" y1="200" x2="460" y2="320"/>
+    <line x1="600" y1="200" x2="760" y2="120"/>
+    <line x1="760" y1="120" x2="900" y2="220"/>
+    <line x1="900" y1="220" x2="1060" y2="110"/>
+    <line x1="900" y1="220" x2="980" y2="330"/>
+    <line x1="460" y1="320" x2="240" y2="300"/>
   </g>
+
+  <!-- sensor nodes, gently beating out of phase -->
+  <g fill="#14E0C8">
+    <circle class="node" cx="120"  cy="80"  r="5" style="animation-delay:0s"/>
+    <circle class="node" cx="300"  cy="150" r="5" style="animation-delay:0.35s"/>
+    <circle class="node" cx="240"  cy="300" r="5" style="animation-delay:0.7s"/>
+    <circle class="node" cx="480"  cy="90"  r="5" style="animation-delay:1.05s"/>
+    <circle class="node" cx="460"  cy="320" r="5" style="animation-delay:1.4s"/>
+    <circle class="node" cx="760"  cy="120" r="5" style="animation-delay:1.75s"/>
+    <circle class="node" cx="900"  cy="220" r="5" style="animation-delay:2.1s"/>
+    <circle class="node" cx="1060" cy="110" r="5" style="animation-delay:2.45s"/>
+    <circle class="node" cx="980"  cy="330" r="5" style="animation-delay:2.8s"/>
+  </g>
+
+  <!-- hub: ripples outward, core breathes -->
+  <circle cx="600" cy="200" r="26" fill="none" stroke="#14E0C8" stroke-width="1.5">
+    <animate attributeName="r" values="26;74" dur="3.4s" repeatCount="indefinite"/>
+    <animate attributeName="stroke-opacity" values="0.42;0" dur="3.4s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="600" cy="200" r="26" fill="none" stroke="#8A2BE2" stroke-width="1.5">
+    <animate attributeName="r" values="26;74" dur="3.4s" begin="1.7s" repeatCount="indefinite"/>
+    <animate attributeName="stroke-opacity" values="0.42;0" dur="3.4s" begin="1.7s" repeatCount="indefinite"/>
+  </circle>
   <g filter="url(#soft)">
-    <circle cx="600" cy="200" r="14" fill="#8A2BE2"/>
+    <circle cx="600" cy="200" r="14" fill="#8A2BE2">
+      <animate attributeName="r" values="13;15.5;13" dur="2.6s" repeatCount="indefinite"/>
+    </circle>
     <circle cx="600" cy="200" r="26" fill="none" stroke="url(#volt)" stroke-width="2" stroke-opacity="0.8"/>
   </g>
 
@@ -60,10 +116,18 @@
   <text x="600" y="252" text-anchor="middle" font-family="ui-sans-serif, 'IBM Plex Sans', Inter, sans-serif"
         font-size="24" fill="#B9B4D6" letter-spacing="6">ADAPTIVE · INTELLIGENT · IOT SYSTEMS</text>
 
+  <!-- slow diagnostic sheen sweeping left to right -->
+  <rect x="-170" y="0" width="170" height="400" fill="url(#sweep)">
+    <animate attributeName="x" values="-170;1250" dur="8s" repeatCount="indefinite"/>
+  </rect>
+
   <!-- footer strip -->
   <rect x="0" y="376" width="1200" height="24" fill="#08080C"/>
   <text x="24" y="393" font-family="ui-monospace, monospace" font-size="13" fill="#5C577A">
     FARLANDS IM7 · CONNECTED INFRASTRUCTURE · MULTI-SENSOR → DECISION → COORDINATED RESPONSE
   </text>
-  <text x="1176" y="393" text-anchor="end" font-family="ui-monospace, monospace" font-size="13" fill="#14E0C8">stage 1 ✅</text>
+  <text x="1176" y="393" text-anchor="end" font-family="ui-monospace, monospace" font-size="13" fill="#14E0C8">
+    v0.5.0
+    <animate attributeName="fill-opacity" values="1;0.45;1" dur="3.4s" repeatCount="indefinite"/>
+  </text>
 </svg>

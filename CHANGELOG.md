@@ -19,6 +19,12 @@ project uses [Semantic Versioning](https://semver.org/).
 - `## Demo` moved to the end of the README, with an inline animated preview
   (`media/demo.gif`) because GitHub strips `<video>` tags in repo context.
 - `LICENSE` copyright holder now reads *Aditya Gowda (VoidMain)*.
+- Banner (`assets/banner.svg`) is now animated — flowing packets along the
+  network links, out-of-phase sensor beats, a rippling hub, a sheen across the
+  wordmark and a slow diagnostic sweep. Pure SMIL/CSS, so it animates inside
+  GitHub's `<img>`; respects `prefers-reduced-motion`.
+- Winning-bench photo (`media/win.jpeg`) moved up to sit directly under the
+  banner.
 
 ## [0.5.0] — Farlands build
 

@@ -3,6 +3,12 @@
 </p>
 
 <p align="center">
+  <img src="media/win.jpeg" alt="VoidMain at the Farlands 48-hour hardware × software hackathon" width="76%"/>
+  <br/>
+  <sub><b>Farlands · Innovation Mission 7</b> — 48 hrs · hardware × software · Cambridge Institute of Technology</sub>
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/VoidMain-0.5.0-14E0C8?style=flat-square" alt="Version"/>
   <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python"/>
   <img src="https://img.shields.io/badge/React-TypeScript%20%2B%20Vite-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React + TS + Vite"/>
@@ -299,14 +305,8 @@ VoidMain is a hackathon prototype, provided **as-is, without warranty**:
 Phone approval → live dashboard on the bench monitor → ESP32-C3 NeoPixel
 reacting to the running scenario.
 
-<p align="center">
-  <a href="media/demo.mp4" title="Play the VoidMain demo">
-    <img src="media/win.jpeg" alt="VoidMain — hardware bench result" width="72%"/>
-  </a>
-  <br/>
-  <b>▶︎ <a href="https://github.com/ADITYA02NM/voidmain/releases/download/v0.5.0/demo.mp4">Play the full demo (88 s)</a></b>
-  &nbsp;·&nbsp; GREEN → YELLOW → RED → PURPLE → recovery
-</p>
+**▶︎ [Play the full demo (88 s)](https://github.com/ADITYA02NM/voidmain/releases/download/v0.5.0/demo.mp4)**
+— GREEN → YELLOW → RED → PURPLE → recovery. A looping preview plays below.
 
 <!-- GitHub's README renderer strips <video> tags in repo context (no host is
      allow-listed), so the inline player below is an animated GIF derived from
