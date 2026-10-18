@@ -10,6 +10,7 @@
 // Driven by the same local MQTT broker as the dashboard.
 
 #include <WiFi.h>
+#include <ESPmDNS.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <Adafruit_SSD1306.h>
@@ -71,6 +72,30 @@ static void publishHealth() {
 
 static uint32_t wifiAttemptAt = 0;
 static bool wifiWasConnected = false;
+
+// Broker discovery state (mDNS). The hackathon LAN reassigns the laptop IP on
+// every reconnect, so we resolve `MQTT_HOSTNAME` -> x.x.x.x each time we link
+// up (and retry while unlinked) instead of trusting a frozen address.
+static IPAddress brokerIP;
+static uint32_t brokerResolveAt = 0;
+static bool brokerFound = false;
+
+// Resolve the laptop's mDNS name and point the MQTT client at it. Falls back to
+// the compiled MQTT_HOST so the board still links on a network without mDNS.
+static void resolveBroker() {
+  IPAddress found = MDNS.queryHost(MQTT_HOSTNAME, 2000);
+  if (found && found != IPAddress(0, 0, 0, 0)) {
+    brokerIP = found;
+    brokerFound = true;
+    mqtt.setServer(brokerIP, MQTT_PORT);
+    Serial.printf("[mdns] %s.local -> %s\n", MQTT_HOSTNAME, found.toString().c_str());
+  } else {
+    brokerFound = false;
+    mqtt.setServer(MQTT_HOST, MQTT_PORT);
+    Serial.printf("[mdns] %s.local not found -> fallback %s\n", MQTT_HOSTNAME, MQTT_HOST);
+  }
+  brokerResolveAt = millis();
+}
 
 // ---- LED engine: throbbing vs blinking ----
 static void ledUpdate() {
@@ -297,10 +322,12 @@ static void wifiMaintain() {
     if (!wifiWasConnected) {
       wifiWasConnected = true;
       Serial.printf(" -> %s\n", WiFi.localIP().toString().c_str());
+      MDNS.begin("voidmain-esp32");  // init mDNS stack for the queryHost below
+      resolveBroker();               // find the laptop wherever it landed
     }
     return;
   }
-  if (wifiWasConnected) { wifiWasConnected = false; ledMode = LED_OFFLINE; wifiStart(); return; }
+  if (wifiWasConnected) { wifiWasConnected = false; ledMode = LED_OFFLINE; brokerFound = false; wifiStart(); return; }
   if (millis() - wifiAttemptAt > 12000) {
     Serial.println("[wifi] retry");
     WiFi.disconnect(); delay(50);
@@ -375,6 +402,8 @@ static void onMqtt(char* topic, byte* payload, unsigned int len) {
 static void mqttMaintain() {
   if (WiFi.status() != WL_CONNECTED) return;
   if (!mqtt.connected()) {
+    // re-resolve the laptop's address periodically in case it roamed to a new IP
+    if (millis() - brokerResolveAt > 15000) resolveBroker();
     // will = retained "esp32 down" so the dashboard tile drops when we vanish
     if (mqtt.connect(MQTT_CLIENT_ID, HEALTH_TOPIC, 0, true, HEALTH_WILL)) {
       mqtt.subscribe("voidmain/risk/score");

@@ -32,7 +32,8 @@ _ROOT = _DASHBOARD.parent                                    # repo root
 # manual, not the whole internet.
 CORPUS: tuple[tuple[str, Path], ...] = (
     ("README", _ROOT / "README.md"),
-    ("DEMO", _ROOT / "DEMO.md"),
+    ("DEMO", _ROOT / "docs" / "DEMO.md"),
+    ("PRODUCT", _ROOT / "docs" / "PRODUCT-BRIEF.md"),
     ("ESP32", _ROOT / "firmware" / "esp32-risk-mini" / "README.md"),
     ("TRIGGERS", _DASHBOARD / "server" / "triggers.py"),
     ("CONFIG", _DASHBOARD / "server" / "config.py"),

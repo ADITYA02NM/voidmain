@@ -254,7 +254,7 @@ voidmain/
 
 | Component | State |
 |---|---|
-| Dashboard (web + server) | Operator console, MQTT bridge, WebAuthn auth, SQLite evidence, WS feed |
+| Dashboard (web + server) | Operator console, MQTT bridge, session/passkey/access-code auth, SQLite evidence, WS feed |
 | 5-device IoT fleet | Campfire, Air Purifier, Front Door, Front Camera, Perimeter Sensor |
 | ESP32-C3 panel | OLED + NeoPixel LED, subscribed to risk/health/alert/device/LED topics |
 | Alert phone | Standalone phone-friendly alert feed at /alerts |

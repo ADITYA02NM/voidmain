@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install deps
+        run: pip install -r requirements-dev.txt
+      - name: Run tests
+        run: pytest -q
+
+  frontend:
+    name: Frontend (typecheck + build + vitest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: dashboard/web/package-lock.json
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck + build
+        run: npm run build
+      - name: Unit tests
+        run: npm test
+
+  firmware:
+    name: Firmware (PlatformIO build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ runner.os }}-${{ hashFiles('firmware/esp32-risk-mini/platformio.ini') }}
+      - name: Install PlatformIO
+        run: pip install platformio
+      - name: Build
+        working-directory: firmware/esp32-risk-mini
+        run: pio run -e esp32c3-supermini

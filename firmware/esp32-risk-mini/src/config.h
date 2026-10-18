@@ -4,8 +4,13 @@
 #define WIFI_SSID "Farlands Hackathon"
 #define WIFI_PASSWORD "farlands@2026"
 
-// MQTT broker = laptop's wlan0 IP (Farlands LAN); mosquitto listens on 0.0.0.0:1883
-#define MQTT_HOST "130.1.31.115"
+// MQTT broker discovery:
+//  The hackathon LAN hands out a NEW laptop IP on every reconnect, so we do
+//  NOT trust a hardcoded address. Primary path = mDNS lookup of the laptop's
+//  hostname (avahi must be running on the laptop). If mDNS fails we fall back
+//  to MQTT_HOST (last known laptop IP) so a bare-bones network still links up.
+#define MQTT_HOSTNAME "archlinux"     // laptop mDNS name -> archlinux.local
+#define MQTT_HOST "10.212.232.129"    // fallback only (last known wlan0 IP)
 #define MQTT_PORT 1883
 #define MQTT_CLIENT_ID "voidmain-esp32-mini"
 
@@ -15,5 +20,5 @@
 #define OLED_SCL 6
 #define OLED_ADDR 0x3C
 
-// Data label shown on the OLED
-#define SIM_LABEL "VOIDMAIN"
+// Simulated-data label shown on the OLED
+#define SIM_LABEL "SIMULATED"

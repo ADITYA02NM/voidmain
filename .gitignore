@@ -1,25 +1,37 @@
 # deps / build
 node_modules/
 dist/
+build/
 __pycache__/
-*.pyc
+*.py[cod]
 .venv/
 venv/
+env/
 
-# secrets / local state — never commit
+# secrets / local runtime state — never commit
 auth.db
 evidence.db
-auth.db-*
 .demo-code
+*.db-journal
+*.db-wal
+.env
+.env.*
+!.env.example
 ca/
 ca.key
 certs/server.key
-.env
 
-# tooling
+# tooling / editor
 .DS_Store
+.idea/
+.vscode/
 *.egg-info/
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.freebuff/
 
 # platformio
 .pio/
+.pioenvs/
+.piolibdeps/

@@ -1,0 +1,7 @@
+# VoidMain dashboard — test / tooling extras (not needed at runtime on the Pi).
+#   pip install -r requirements-dev.txt
+-r server/requirements.txt
+
+pytest==8.3.3
+pytest-asyncio==0.24.0
+paho-mqtt>=2.1.0

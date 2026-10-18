@@ -9,7 +9,21 @@
   <img src="https://img.shields.io/badge/MQTT-Mosquitto-3C52A5?style=flat-square&logo=mosquitto&logoColor=white" alt="MQTT"/>
   <img src="https://img.shields.io/badge/SQLite-evidence-003B57?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite"/>
   <img src="https://img.shields.io/badge/cloud-none%20%E2%80%94%20ever-0A0A0F?style=flat-square" alt="Zero cloud"/>
+  <img src="https://github.com/ADITYA02NM/voidmain/actions/workflows/ci.yml/badge.svg" alt="CI"/>
+  <img src="https://img.shields.io/badge/license-MIT-8A2BE2?style=flat-square" alt="MIT License"/>
 </p>
+
+---
+
+## Demo
+
+<p align="center">
+  <a href="media/demo.mp4"><img src="media/win.jpeg" alt="VoidMain — demo" width="72%"/></a>
+</p>
+
+- 🎬 **[Watch the demo](media/demo.mp4)** — full GREEN → YELLOW → RED → PURPLE → recovery arc
+- 🖼️ **[Result](media/win.jpeg)** — Farlands Innovation Mission 7
+- 📑 **[Slide deck](docs/DECK.pdf)** — 7-slide system brief
 
 ---
 
@@ -119,10 +133,11 @@ mosquitto -d
 cd dashboard
 python3 -m venv venv
 venv/bin/pip install -r server/requirements.txt
-VOIDMAIN_HTTP_PORT=8080 venv/bin/python -c "from server.main import main; main()"
+VOIDMAIN_HTTP_PORT=8080 VOIDMAIN_DEMO_CODE=demo venv/bin/python -c "from server.main import main; main()"
 
-# 3 — first-run owner enrollment (fresh auth.db)
-venv/bin/python -m server.auth_cli enroll-token
+# 3 — sign in with the LAN access code (VOIDMAIN_DEMO_CODE), or register a
+#     WebAuthn passkey on first run
+venv/bin/python -m server.auth_cli enroll-token   # optional passkey enrollment
 
 # 4 — frontend
 cd dashboard/web
@@ -208,17 +223,17 @@ venv/bin/python tools/gen_data.py --days 30
 
 ```
 voidmain/
-├── assets/                 # banner + architecture SVGs
 ├── dashboard/
 │   ├── web/                # React + TS operator console (Vite)
-│   ├── server/             # aiohttp backend: MQTT bridge, WebAuthn auth, SQLite, WS
+│   ├── server/             # aiohttp backend: MQTT bridge, auth, SQLite, WS, RAG
 │   │   ├── main.py         # entry point
 │   │   ├── bridge.py       # MQTT ↔ WebSocket hub
 │   │   ├── config.py       # VOIDMAIN_* env config
 │   │   ├── triggers.py     # device catalogue + trigger allowlist
 │   │   ├── evidence.py     # SQLite evidence writer
 │   │   ├── db.py           # read-only evidence reader
-│   │   ├── auth.py         # WebAuthn routes
+│   │   ├── rag.py          # local console assistant (BM25 + Ollama)
+│   │   ├── auth.py         # session / passkey / access-code routes
 │   │   └── auth_cli.py     # passkey enrollment / audit / token
 │   ├── tools/
 │   │   ├── mock_feed.py    # scenario publisher (GREEN→PURPLE replay)
@@ -226,6 +241,16 @@ voidmain/
 │   ├── alerts.html         # phone-friendly alert feed
 │   ├── debug.html          # WS debug inspector + trigger console
 │   └── tests/
+├── firmware/
+│   └── esp32-risk-mini/    # ESP32-C3 firmware (OLED + NeoPixel risk mirror)
+├── docs/                   # product brief, run-of-show, slide deck
+├── media/                  # demo video + result screenshot
+├── assets/                 # banner + architecture SVGs
+├── .github/                # CI workflow + issue / PR templates
+├── start.sh                # one-command local stack launcher
+├── LICENSE                 # MIT
+├── CHANGELOG.md
+├── CONTRIBUTING.md
 └── README.md
 ```
 
@@ -235,7 +260,7 @@ voidmain/
 
 | Component | State |
 |---|---|
-| Dashboard (web + server) | Operator console, MQTT bridge, WebAuthn auth, SQLite evidence, WS feed |
+| Dashboard (web + server) | Operator console, MQTT bridge, session/passkey/access-code auth, SQLite evidence, WS feed |
 | 5-device IoT fleet | Campfire, Air Purifier, Front Door, Front Camera, Yard Motion |
 | ESP32-C3 panel | OLED + NeoPixel LED, subscribed to risk/health/alert/device/LED topics |
 | Alert phone | Standalone phone-friendly alert feed at /alerts |
