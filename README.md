@@ -5,7 +5,7 @@
 <p align="center">
   <img src="media/win.jpeg" alt="VoidMain at the Farlands 48-hour hardware × software hackathon" width="76%"/>
   <br/>
-  <sub><b>Farlands · Innovation Mission 7</b> — 48 hrs · hardware × software · Cambridge Institute of Technology</sub>
+  <sub><b>Farlands · Innovation Mission 7</b> — 48 hrs · hardware × software · Cambridge Institute of Technology · team Cyber Assassin</sub>
 </p>
 
 <p align="center">
@@ -279,6 +279,15 @@ Built at the **Farlands 48-hour Hardware × Software Hackathon**, hosted by
   Adaptive Intelligent IoT Systems*
 - **Team:** Cyber Assassin
 - **Repository:** [github.com/ADITYA02NM/voidmain](https://github.com/ADITYA02NM/voidmain)
+
+### Team Cyber Assassin
+
+| # | Member | Role |
+|---|---|---|
+| Captain | Priyanka Meenkeri | Frontend |
+| Member 1 | Navneeth “Kaiser” | Simulation |
+| Member 2 | Verenya | MQTT server |
+| | Aditya Gowda | MasterMind |
 
 Thanks to the organizers, mentors and judges at Cambridge Institute of Technology
 for the brief, the bench hardware and the 48 hours.

@@ -25,6 +25,7 @@ project uses [Semantic Versioning](https://semver.org/).
   GitHub's `<img>`; respects `prefers-reduced-motion`.
 - Winning-bench photo (`media/win.jpeg`) moved up to sit directly under the
   banner.
+- README Credits now carry the full **team Cyber Assassin** roster.
 
 ## [0.5.0] — Farlands build
 
