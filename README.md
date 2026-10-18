@@ -280,32 +280,8 @@ Built at the **Farlands 48-hour Hardware × Software Hackathon**, hosted by
 - **Team:** Cyber Assassin
 - **Repository:** [github.com/ADITYA02NM/voidmain](https://github.com/ADITYA02NM/voidmain)
 
-### Team Cyber Assassin
-
-| # | Member | Role |
-|---|---|---|
-| Captain | Priyanka Meenkeri | Frontend |
-| Member 1 | Navneeth “Kaiser” | Simulation |
-| Member 2 | Verenya | MQTT server |
-| | Aditya Gowda | MasterMind |
-
 Thanks to the organizers, mentors and judges at Cambridge Institute of Technology
 for the brief, the bench hardware and the 48 hours.
-
----
-
-## License
-
-**MIT © 2026 Aditya Gowda (VoidMain)** — full text in [LICENSE](LICENSE).
-
-VoidMain is a hackathon prototype, provided **as-is, without warranty**:
-
-- Sensor and device traffic in this repository is **simulated** unless explicitly
-  labelled otherwise; nothing here constitutes a hardware validation claim.
-- The ESP32-C3 firmware under `firmware/` is supplied as-built, not as a certified
-  or production-hardened product.
-- Third-party dependencies remain under their own licenses — see
-  `dashboard/server/requirements.txt` and `dashboard/web/package.json`.
 
 ---
 
@@ -333,3 +309,31 @@ reacting to the running scenario.
 | 🖼️ Result screenshot | [media/win.jpeg](media/win.jpeg) |
 | 📑 Slide deck (7 pages) | [docs/DECK.pdf](docs/DECK.pdf) |
 | 📦 Release notes | [v0.5.0](https://github.com/ADITYA02NM/voidmain/releases/tag/v0.5.0) |
+
+---
+
+## Team Cyber Assassin
+
+Four people, 48 hours, at Cambridge Institute of Technology.
+
+| # | Member | Role |
+|---|---|---|
+| Captain | Priyanka Meenkeri | Frontend |
+| Member 1 | Navneeth “Kaiser” | Simulation |
+| Member 2 | Verenya | MQTT server |
+| No one | Aditya Gowda | MasterMind |
+
+---
+
+## License
+
+**MIT © 2026 Aditya Gowda (VoidMain)** — full text in [LICENSE](LICENSE).
+
+VoidMain is a hackathon prototype, provided **as-is, without warranty**:
+
+- Sensor and device traffic in this repository is **simulated** unless explicitly
+  labelled otherwise; nothing here constitutes a hardware validation claim.
+- The ESP32-C3 firmware under `firmware/` is supplied as-built, not as a certified
+  or production-hardened product.
+- Third-party dependencies remain under their own licenses — see
+  `dashboard/server/requirements.txt` and `dashboard/web/package.json`.
