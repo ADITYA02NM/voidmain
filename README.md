@@ -15,36 +15,6 @@
 
 ---
 
-## Demo
-
-<p align="center">
-  <a href="media/demo.mp4" title="Play the VoidMain demo">
-    <img src="media/win.jpeg" alt="VoidMain — click to play the demo" width="72%"/>
-  </a>
-  <br/>
-  <b>▶︎ <a href="https://github.com/ADITYA02NM/voidmain/releases/download/v0.5.0/demo.mp4">Play the full demo (88 s)</a></b>
-  &nbsp;·&nbsp; GREEN → YELLOW → RED → PURPLE → recovery
-</p>
-
-<!-- GitHub's README renderer strips <video> tags in repo context (no host is
-     allow-listed), so the inline player below is an animated GIF derived from
-     media/demo.mp4 — 8x speed, ~11 s, 89 frames. Click it for the full clip. -->
-<p align="center">
-  <a href="media/demo.mp4" title="Play the full 88 s demo">
-    <img src="media/demo.gif" alt="VoidMain demo — phone approval, live dashboard, ESP32 NeoPixel" width="300"/>
-  </a>
-</p>
-
-| Asset | Link |
-|---|---|
-| 🎬 Demo video (88 s, MP4) | [play](https://github.com/ADITYA02NM/voidmain/releases/download/v0.5.0/demo.mp4) · [in repo](media/demo.mp4) |
-| 🎞️ Inline preview (11 s GIF) | [media/demo.gif](media/demo.gif) |
-| 🖼️ Result screenshot | [media/win.jpeg](media/win.jpeg) |
-| 📑 Slide deck (7 pages) | [docs/DECK.pdf](docs/DECK.pdf) |
-| 📦 Release notes | [v0.5.0](https://github.com/ADITYA02NM/voidmain/releases/tag/v0.5.0) |
-
----
-
 # VoidMain
 
 > **Many sensors. One brain. Coordinated responses.**
@@ -294,5 +264,63 @@ reliability over feature count.
 
 ## Credits
 
-- **Event:** Farlands · Innovation Mission 7 — *Connected Infrastructure:
-  Adaptive Intelligent IoT Systems*.
+Built at the **Farlands 48-hour Hardware × Software Hackathon**, hosted by
+**Cambridge Institute of Technology**.
+
+- **Event:** Farlands · 48 hrs · Hardware × Software
+- **Host:** Cambridge Institute of Technology
+- **Mission:** Farlands Innovation Mission 7 — *Connected Infrastructure:
+  Adaptive Intelligent IoT Systems*
+- **Team:** Cyber Assassin
+- **Repository:** [github.com/ADITYA02NM/voidmain](https://github.com/ADITYA02NM/voidmain)
+
+Thanks to the organizers, mentors and judges at Cambridge Institute of Technology
+for the brief, the bench hardware and the 48 hours.
+
+---
+
+## License
+
+**MIT © 2026 Aditya Gowda (VoidMain)** — full text in [LICENSE](LICENSE).
+
+VoidMain is a hackathon prototype, provided **as-is, without warranty**:
+
+- Sensor and device traffic in this repository is **simulated** unless explicitly
+  labelled otherwise; nothing here constitutes a hardware validation claim.
+- The ESP32-C3 firmware under `firmware/` is supplied as-built, not as a certified
+  or production-hardened product.
+- Third-party dependencies remain under their own licenses — see
+  `dashboard/server/requirements.txt` and `dashboard/web/package.json`.
+
+---
+
+## Demo
+
+Phone approval → live dashboard on the bench monitor → ESP32-C3 NeoPixel
+reacting to the running scenario.
+
+<p align="center">
+  <a href="media/demo.mp4" title="Play the VoidMain demo">
+    <img src="media/win.jpeg" alt="VoidMain — hardware bench result" width="72%"/>
+  </a>
+  <br/>
+  <b>▶︎ <a href="https://github.com/ADITYA02NM/voidmain/releases/download/v0.5.0/demo.mp4">Play the full demo (88 s)</a></b>
+  &nbsp;·&nbsp; GREEN → YELLOW → RED → PURPLE → recovery
+</p>
+
+<!-- GitHub's README renderer strips <video> tags in repo context (no host is
+     allow-listed), so the inline player below is an animated GIF derived from
+     media/demo.mp4 — 8x speed, ~11 s, 89 frames. Click it for the full clip. -->
+<p align="center">
+  <a href="media/demo.mp4" title="Play the full 88 s demo">
+    <img src="media/demo.gif" alt="VoidMain demo — phone approval, live dashboard, ESP32 NeoPixel" width="300"/>
+  </a>
+</p>
+
+| Asset | Link |
+|---|---|
+| 🎬 Demo video (88 s, MP4) | [play](https://github.com/ADITYA02NM/voidmain/releases/download/v0.5.0/demo.mp4) · [in repo](media/demo.mp4) |
+| 🎞️ Inline preview (11 s GIF) | [media/demo.gif](media/demo.gif) |
+| 🖼️ Result screenshot | [media/win.jpeg](media/win.jpeg) |
+| 📑 Slide deck (7 pages) | [docs/DECK.pdf](docs/DECK.pdf) |
+| 📦 Release notes | [v0.5.0](https://github.com/ADITYA02NM/voidmain/releases/tag/v0.5.0) |

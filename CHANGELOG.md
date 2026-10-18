@@ -11,6 +11,14 @@ project uses [Semantic Versioning](https://semver.org/).
   compiled-in fallback, so the board survives the host's IP changing.
 - CI workflow covering backend tests, frontend typecheck/build/tests, and the
   PlatformIO firmware build.
+- README Credits section naming the **Farlands 48-hour Hardware × Software
+  Hackathon** and its host, **Cambridge Institute of Technology**, plus an
+  explicit License section.
+
+### Changed
+- `## Demo` moved to the end of the README, with an inline animated preview
+  (`media/demo.gif`) because GitHub strips `<video>` tags in repo context.
+- `LICENSE` copyright holder now reads *Aditya Gowda (VoidMain)*.
 
 ## [0.5.0] — Farlands build
 
